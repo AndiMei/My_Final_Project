@@ -112,6 +112,7 @@ char angkaF[] = "-12.349";
 float angka_f;
 
 char gain[7];
+_Bool coba = 1;
 
 
 
