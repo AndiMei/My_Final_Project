@@ -114,8 +114,8 @@ class _BluetoothPageState extends State<BluetoothPage>
 
   void _sendByte() async {
     try {
-      print('Mengirim');
-      connectionBT.output.add(ascii.encode('Mengirim data\n'));
+      // print('Te');
+      connectionBT.output.add(ascii.encode('Test Data\n'));
       await connectionBT.output.allSent;
     } catch (e) {
       setState(() {});
@@ -127,6 +127,19 @@ class _BluetoothPageState extends State<BluetoothPage>
     return Scaffold(
       appBar: AppBar(
         title: Text("Bluetooth Setting"),
+        actions: <Widget>[
+          isConnected
+              ? Icon(
+                  Icons.bluetooth_connected_outlined,
+                  size: 40,
+                  color: Colors.greenAccent,
+                )
+              : Icon(
+                  Icons.bluetooth_disabled,
+                  size: 40,
+                  color: Colors.grey,
+                )
+        ],
       ),
       body: Container(
         child: Column(
@@ -159,13 +172,11 @@ class _BluetoothPageState extends State<BluetoothPage>
                     .toList(),
               ),
             ),
-            isConnectedBT
-                ? Text("Device Connected !")
-                : Text("Device Disconnected !"),
             FloatingActionButton(
               child: Icon(Icons.send),
               onPressed: isConnectedBT ? _sendByte : null,
-              backgroundColor: Colors.greenAccent[700],
+              backgroundColor:
+                  isConnectedBT ? Colors.greenAccent[700] : Colors.grey,
             )
           ],
         ),

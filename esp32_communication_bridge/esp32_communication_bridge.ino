@@ -95,6 +95,6 @@ void Bluetooth_Stream() {
   }
 }
 void loop() {
-//  WiFi_Stream();
-    Bluetooth_Stream();
+  WiFi_Stream();
+//    Bluetooth_Stream();
 }

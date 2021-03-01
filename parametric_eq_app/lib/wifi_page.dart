@@ -11,7 +11,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 
 String _devicesIP = '192.168.001.001';
-String sendByteMsg = "Test";
+String sendByteMsg = "Test Data lewat WiFi";
 int charLength = _devicesIP.length;
 String msgData = "";
 
@@ -77,7 +77,7 @@ class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
         if (isConnectedWS) {
           msgData = data;
         }
-        print("DataReceived: " + data);
+        print(data);
       });
     } catch (e) {
       print(e);
@@ -89,6 +89,19 @@ class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: Text("WiFi Setting"),
+        actions: <Widget>[
+          isConnectedWS
+              ? Icon(
+                  Icons.wifi,
+                  size: 40,
+                  color: Colors.green,
+                )
+              : Icon(
+                  Icons.perm_scan_wifi_outlined,
+                  size: 40,
+                  color: Colors.grey,
+                )
+        ],
       ),
       body: Column(
         children: <Widget>[
@@ -123,8 +136,9 @@ class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
           ),
           FloatingActionButton(
             child: Icon(Icons.send),
-            onPressed: isConnectedWS ? () {} : null,
-            backgroundColor: Colors.greenAccent[700],
+            onPressed: isConnectedWS ? _sendByte : null,
+            backgroundColor:
+                isConnectedWS ? Colors.greenAccent[700] : Colors.grey,
           )
           // isConnectedWS
           //     ? StreamBuilder(
