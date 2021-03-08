@@ -29,6 +29,7 @@
 #include "myFilter.h"
 #include "myOled.h"
 #include "myFonts.h"
+#include "mySwitch.h"
 #include "string.h"
 #include "stdlib.h"
 
@@ -63,6 +64,9 @@ DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
+
+enum state0{home_dis, home, setting_dis, setting , save_dis, save} myState;
+enum state1{l_gain_dis, l_gain, r_gain_dis, r_gain} state_home;
 
 uint32_t L_Buff = 0;
 uint32_t R_Buff = 0;
@@ -101,6 +105,7 @@ char *token;
 char delim[2] = "#";
 char *array[16];
 
+int8_t EQ_level_R, EQ_level_L;
 int8_t EQ_preset;
 int8_t EQ_channel;
 int8_t EQ_band;
@@ -174,32 +179,8 @@ void writeWord(float dataf, _Bool ch, uint8_t buffer){
 		txBuff[3+buffer] = (result_uint32<<8) & 0x0000FF00;
 	}
 }
-uint8_t readEnc(void){
-	uint8_t dir;
-	if(HAL_GPIO_ReadPin(ENC_CLK_GPIO_Port, ENC_CLK_Pin) == 0){
-		while(HAL_GPIO_ReadPin(ENC_CLK_GPIO_Port, ENC_CLK_Pin) == 0){
-			if(HAL_GPIO_ReadPin(ENC_CLK_GPIO_Port, ENC_CLK_Pin) == 0){
-				if(HAL_GPIO_ReadPin(ENC_DT_GPIO_Port, ENC_DT_Pin) == 0){
-					dir = 1;
-					break;
-				}
-				else{
-					dir = 2;
-					break;
-				}
-			}
-		}
 
-	}
-	else if(HAL_GPIO_ReadPin(ENC_CLK_GPIO_Port, ENC_CLK_Pin) && HAL_GPIO_ReadPin(ENC_DT_GPIO_Port, ENC_DT_Pin)){
-		dir = 0;
-	}
 
-	if(!HAL_GPIO_ReadPin(ENC_SW_GPIO_Port, ENC_SW_Pin)){
-		dir = 3;
-	}
-	return dir;
-}
 
 void Flash_Write(uint32_t flash_addr, uint32_t flash_data){
 	HAL_FLASH_Unlock();
@@ -237,7 +218,6 @@ int main(void)
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -261,15 +241,47 @@ int main(void)
 	//  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
 
 	Display_Init();
-	Display_GotoXY(0, 0);
-	Display_Puts("ANDI", &Font_11x18, 1);
-	Display_GotoXY(13, 30);
-	Display_Angka3u(123, &Font_11x18, 1);
-	Display_GotoXY(13, 50);
-	Display_Puts("Prasetyo", &Font_7x10, 1);
+	//	Display_GotoXY(0, 0);
+	//	Display_Puts("ANDI", &Font_11x18, 1);
+	//	Display_GotoXY(13, 30);
+	//	Display_Angka3u(123, &Font_11x18, 1);
+	//	Display_GotoXY(13, 50);
+	//	Display_Puts("Prasetyo", &Font_7x10, 1);
+	//	Display_UpdateScreen();
+
+	// 5 huruf 18 huruf
+	Display_DrawRectangle(0, 0, 61, 12, 1);
+	Display_GotoXY(3, 2); Display_Puts("PRESET 9", &Font_7x10, 1);
+	Display_DrawRectangle(66, 0, 61, 12, 1);
+	Display_GotoXY(69, 2); Display_Puts("BAND 5", &Font_7x10, 1);
+
+	//	Display_DrawRectangle(0, 17, 61, 12, 1);
+	Display_DrawFilledRectangle(0, 17, 61, 12, 1);
+	Display_GotoXY(3, 19); Display_Puts("-12.0 dB", &Font_7x10, 0);
+	Display_DrawRectangle(66, 17, 61, 12, 1);
+	Display_GotoXY(69, 19); Display_Puts("+12.0 dB", &Font_7x10, 1);
+	//	Display_GotoXY(5, 16); Display_Puts("BAND 3", &Font_7x10, 1);
+
+	Display_DrawRectangle(0, 34, 61, 12, 1);
+	Display_GotoXY(3, 36); Display_Puts("20 Hz", &Font_7x10, 1);
+	Display_DrawRectangle(66, 34, 61, 12, 1);
+	Display_GotoXY(69, 36); Display_Puts("20 kHz", &Font_7x10, 1);
+
+	Display_DrawRectangle(0, 51, 61, 12, 1);
+	Display_GotoXY(3, 53); Display_Puts("0.02", &Font_7x10, 1);
+	Display_DrawRectangle(66, 51, 61, 12, 1);
+	Display_GotoXY(69, 53); Display_Puts("1.00", &Font_7x10, 1);
+
+	//	Display_GotoXY(0, 11); Display_Puts("234567890234567892345", &Font_7x10, 1);
+	//	Display_GotoXY(0, 22); Display_Puts("234567890234567892345", &Font_7x10, 1);
+	//	Display_GotoXY(0, 33); Display_Puts("234567890234567892345", &Font_7x10, 1);
+	//	Display_GotoXY(0, 44); Display_Puts("234567890234567892345", &Font_7x10, 1);
+	//	Display_GotoXY(0, 55); Display_Puts("234567890234567892345", &Font_7x10, 1);
+
 	Display_UpdateScreen();
 
-	HAL_Delay(1000);
+	HAL_Delay(2000);
+	Display_Clear();
 
 	/* Hitung koefisien filter Kanan */
 	shelv(&R_cS1[0], 0, 0, 100, FREQSAMPLING);
@@ -296,82 +308,216 @@ int main(void)
 	bakso[1] = 0x11;
 	bakso[2] = 0x01;
 
-	_Bool complete=0;
+		_Bool complete=0;
 	//  SSD1306_Clear();
-//	HAL_UART_Transmit_DMA(&huart1, (uint8_t*)data_serial, strlen(data_serial));
-//	HAL_UART_Receive_DMA(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx));
+	//	HAL_UART_Transmit_DMA(&huart1, (uint8_t*)data_serial, strlen(data_serial));
+	//	HAL_UART_Receive_DMA(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx));
 	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
 
 	EQ_preset = atoi(strParamEQ[0]);
-//	EQ_fc = 20;
-//	if(EQ_fc<0){
-//		EQ_fc=-EQ_fc;
-//		gain[0] = '-';
-//	}
-//	else{
-//		gain[0] = '+';
-//	}
-//	gain[1] = EQ_fc/10000 + 0x30; 			/* puluhan ribu */
-//	gain[2] = (EQ_fc%10000)/1000 + 0x30; 	/* ribuan */
-//	gain[3] = (EQ_fc%1000)/100 + 0x30;		/* ratusan */
-//	gain[4] = (EQ_fc%100)/10 + 0x30;		/* puluhan */
-//	gain[5] = (EQ_fc%10) + 0x30;			/* satuan */
-//	gain[6] = '\0';
-//
-//
-//
-//	angka_f = atoff(angkaF);
+	//	EQ_fc = 20;
+	//	if(EQ_fc<0){
+	//		EQ_fc=-EQ_fc;
+	//		gain[0] = '-';
+	//	}
+	//	else{
+	//		gain[0] = '+';
+	//	}
+	//	gain[1] = EQ_fc/10000 + 0x30; 			/* puluhan ribu */
+	//	gain[2] = (EQ_fc%10000)/1000 + 0x30; 	/* ribuan */
+	//	gain[3] = (EQ_fc%1000)/100 + 0x30;		/* ratusan */
+	//	gain[4] = (EQ_fc%100)/10 + 0x30;		/* puluhan */
+	//	gain[5] = (EQ_fc%10) + 0x30;			/* satuan */
+	//	gain[6] = '\0';
+	//
+	//
+	//
+	//	angka_f = atoff(angkaF);
 
-//			  myLCD::Data(x/100+0x30);           // menulis ratusan
-//			    myLCD::Data((x%100)/10+0x30);      // menulis puluhan
-//			    myLCD::Data(x%10+0x30);
-//	Flash_Write(0x080E0000, 0xABCD1234);
+	//			  myLCD::Data(x/100+0x30);           // menulis ratusan
+	//			    myLCD::Data((x%100)/10+0x30);      // menulis puluhan
+	//			    myLCD::Data(x%10+0x30);
+	//	Flash_Write(0x080E0000, 0xABCD1234);
 	cntVal = Flash_Read(0x080E0000);
 
 	while (1)
 	{
-//		HAL_UART_Receive(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx), 100);
-
-		int i=0;
-//		token = strtok(data_serial_rx, "#");
-//		while(token != NULL){
-//			array[i++]=token;
-//			token = strtok(NULL,"#");
-//		}
-		/* W0C0B0G120F20000B100\n */
-//		if(data_serial_rx[0] == 'W'){
-//			EQ_preset = data_serial)
-//		}
-
-		token = strtok(data_serial_rx, "#");
-		while(token != NULL){
-			strParamEQ[i++] = token;
-			token = strtok(NULL, "#");
-		}
-		EQ_preset = atoi(strParamEQ[0]);
-		EQ_band = atoi(strParamEQ[1]);
-		EQ_gain = atof(strParamEQ[2]);
-		EQ_fc = atoi(strParamEQ[3]);
-		EQ_Q = atof(strParamEQ[4]);
-
-//		HAL_Delay(1000);
-//		if((readEnc()==1) && !complete){
-//			cntVal ++;
-//			Flash_Write(0x080E0000, cntVal);
-//			complete=1;
-//
-//
-//		}
-//		else if((readEnc()==2) && !complete){
-//			cntVal --;
-//			complete=1;
-//		}
-//		else if(readEnc()==0){
-//			complete=0;
-//		}
-//		else if(readEnc()==3){
+//		switch (readEncoder()) {
+//		case 1:
+//			cntVal++;
+//			break;
+//		case 2:
+//			cntVal--;
+//			break;
+//		case 3:
 //			cntVal = 0;
+//
 //		}
+//		if(readEncoder()==1){
+//			cntVal++;
+//		}
+//		if(readEncoder()==2){
+//			cntVal--;
+//		}
+//		if(readEncoder()==3){
+//			cntVal=0;
+//		}
+//		if(switchEncoder()){
+//			cntVal=0;
+//		}
+//
+//		if(readEncoder()==1){
+//			cntVal++;
+//		}
+//		if(readEncoder()==2){
+//			cntVal--;
+//		}
+//
+//		if(switchUp()){
+//			cntVal++;
+//		}
+//		if(switchDown()){
+//			cntVal--;
+//		}
+//		if(switchLeft()){
+//			cntVal--;
+//		}
+//		if(switchRight()){
+//			cntVal++;
+//		}
+
+		switch(myState){
+		case home_dis:
+			Display_DrawRectangle(0, 0, 128, 12, 1);
+			Display_GotoXY(32, 2); Display_Puts("PRESET 9", &Font_7x10, 1);
+			myState = home;
+			Display_UpdateScreen();
+			break;
+
+		case home:
+			switch(state_home){
+			case l_gain_dis:
+//				Display_Clear();
+				Display_DrawFilledRectangle(0, 17, 128, 12, 0);
+				Display_DrawFilledRectangle(0, 17, 61, 12, 1);
+				Display_GotoXY(3, 19); Display_Puts("100", &Font_7x10, 0);
+				Display_DrawRectangle(66, 17, 61, 12, 1);
+				Display_GotoXY(69, 19); Display_Puts("90", &Font_7x10, 1);
+				Display_UpdateScreen();
+				state_home = l_gain;
+				break;
+			case l_gain:
+				if(readEncoder()==1){
+					EQ_level_L += 2;
+					if(EQ_level_L >= 1)
+						EQ_level_L = 1;
+					state_home = l_gain_dis;
+				}
+				else if(readEncoder()==2){
+					EQ_level_L -= 2;
+					if(EQ_level_L <= 0)
+						EQ_level_L = 0;
+					state_home = l_gain_dis;
+				}
+				if(switchRight()){
+					state_home = r_gain_dis;
+				}
+				break;
+			case r_gain_dis:
+				Display_DrawFilledRectangle(0, 17, 128, 12, 0);
+				Display_DrawRectangle(0, 17, 61, 12, 1);
+				Display_GotoXY(3, 19); Display_Puts("90", &Font_7x10, 1);
+				Display_DrawFilledRectangle(66, 17, 61, 12, 1);
+				Display_GotoXY(69, 19); Display_Puts("100", &Font_7x10, 0);
+				Display_UpdateScreen();
+				state_home = r_gain;
+				break;
+			case r_gain:
+				if(readEncoder()==1){
+					EQ_level_R += 2;
+					if(EQ_level_R >= 1)
+						EQ_level_R = 1;
+					state_home = r_gain_dis;
+				}
+				else if(readEncoder()==2){
+					EQ_level_R -= 2;
+					if(EQ_level_R <= 0)
+						EQ_level_R = 0;
+					state_home = r_gain_dis;
+				}
+				if(switchLeft()){
+					state_home = l_gain_dis;
+				}
+				break;
+			}
+			break;
+
+		case setting:
+			complete = 0;
+			if(switchEncoder()){
+				myState = save;
+				complete = 1;
+				Display_Clear();
+				Display_DrawRectangle(0, 17, 61, 12, 1);
+							Display_GotoXY(3, 19); Display_Puts("-12.0 dB", &Font_7x10, 1);
+							Display_UpdateScreen();
+			}
+
+
+			break;
+		case save:
+			complete = 0;
+			if(switchEncoder()){
+				myState = home;
+				complete = 1;
+				Display_Clear();
+				Display_UpdateScreen();
+			}
+
+		}
+
+		//		HAL_UART_Receive(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx), 100);
+
+		//		int i=0;
+		////		token = strtok(data_serial_rx, "#");
+		////		while(token != NULL){
+		////			array[i++]=token;
+		////			token = strtok(NULL,"#");
+		////		}
+		//		/* W0C0B0G120F20000B100\n */
+		////		if(data_serial_rx[0] == 'W'){
+		////			EQ_preset = data_serial)
+		////		}
+		//
+		//		token = strtok(data_serial_rx, "#");
+		//		while(token != NULL){
+		//			strParamEQ[i++] = token;
+		//			token = strtok(NULL, "#");
+		//		}
+		//		EQ_preset = atoi(strParamEQ[0]);
+		//		EQ_band = atoi(strParamEQ[1]);
+		//		EQ_gain = atof(strParamEQ[2]);
+		//		EQ_fc = atoi(strParamEQ[3]);
+		//		EQ_Q = atof(strParamEQ[4]);
+
+		//		HAL_Delay(1000);
+//				if((readEnc()==1) && !complete){
+//					cntVal ++;
+////					Flash_Write(0x080E0000, cntVal);
+//					complete=1;
+//
+//
+//				}
+//				else if((readEnc()==2) && !complete){
+//					cntVal --;
+//					complete=1;
+//				}
+//				else if(readEnc()==0){
+//					complete=0;
+//				}
+//				else if(readEnc()==3){
+//					cntVal = 0;
+//				}
 
 
 		//	  cntVal = TIM1->CNT;
@@ -626,87 +772,93 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LED_Pin|TEST_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(I2S_EN_GPIO_Port, I2S_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, R_SIGN_Pin|L_SIGN_Pin|SW_RIGHT_Pin|SW_LEFT_Pin 
-                          |SW_DOWN_Pin|SW_UP_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LED_Pin|TP_D_Pin|TP_C_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : LED_Pin TEST_Pin */
-  GPIO_InitStruct.Pin = LED_Pin|TEST_Pin;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOD, TP_B_Pin|TP_A_Pin|R_SIGN_Pin|L_SIGN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : I2S_EN_Pin */
+  GPIO_InitStruct.Pin = I2S_EN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(I2S_EN_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : ENC_DT_Pin ENC_SW_Pin ENC_CLK_Pin */
-  GPIO_InitStruct.Pin = ENC_DT_Pin|ENC_SW_Pin|ENC_CLK_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pins : LED_Pin TP_D_Pin TP_C_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|TP_D_Pin|TP_C_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : R_SIGN_Pin L_SIGN_Pin SW_RIGHT_Pin SW_LEFT_Pin 
-                           SW_DOWN_Pin SW_UP_Pin */
-  GPIO_InitStruct.Pin = R_SIGN_Pin|L_SIGN_Pin|SW_RIGHT_Pin|SW_LEFT_Pin 
-                          |SW_DOWN_Pin|SW_UP_Pin;
+  /*Configure GPIO pins : TP_B_Pin TP_A_Pin R_SIGN_Pin L_SIGN_Pin */
+  GPIO_InitStruct.Pin = TP_B_Pin|TP_A_Pin|R_SIGN_Pin|L_SIGN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : SW_UP_Pin SW_DOWN_Pin SW_LEFT_Pin SW_RIGHT_Pin */
+  GPIO_InitStruct.Pin = SW_UP_Pin|SW_DOWN_Pin|SW_LEFT_Pin|SW_RIGHT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : ENC_SW_Pin ENC_CLK_Pin ENC_DT_Pin */
+  GPIO_InitStruct.Pin = ENC_SW_Pin|ENC_CLK_Pin|ENC_DT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
 }
 
 /* USER CODE BEGIN 4 */
 void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s){
-	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-	HAL_GPIO_WritePin(TEST_GPIO_Port, TEST_Pin, 1);
 	L_Samplef = readWord(0,0);
 	R_Samplef = readWord(1,0);
-//
-////	i=10;
-////	if(--i < 0){
-////		i=10;
-////		if(L_Samplef > max) max = L_Samplef;
-////		if(L_Samplef < min) min = L_Samplef;
-////	}
-//
-////	if(R_Samplef > max) max = L_Samplef;
-////	if(R_Samplef < min) min = L_Samplef;
-//
+	//
+	////	i=10;
+	////	if(--i < 0){
+	////		i=10;
+	////		if(L_Samplef > max) max = L_Samplef;
+	////		if(L_Samplef < min) min = L_Samplef;
+	////	}
+	//
+	////	if(R_Samplef > max) max = L_Samplef;
+	////	if(R_Samplef < min) min = L_Samplef;
+	//
 	writeWord(L_Samplef, 0, 0);
 	writeWord(L_Samplef, 1, 0);
-	HAL_GPIO_WritePin(TEST_GPIO_Port, TEST_Pin, 0);
 }
 
 void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s){
-	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-	HAL_GPIO_WritePin(TEST_GPIO_Port, TEST_Pin, 1);
 	L_Samplef = readWord(0,4);
 	R_Samplef = readWord(1,4);
-//	i=10;
-//	if(--i < 0){
-//		i=10;
-//		if(L_Samplef > max) max = L_Samplef;
-//		if(L_Samplef < min) min = L_Samplef;
-//	}
+	//	i=10;
+	//	if(--i < 0){
+	//		i=10;
+	//		if(L_Samplef > max) max = L_Samplef;
+	//		if(L_Samplef < min) min = L_Samplef;
+	//	}
 
-//	writeWord(L_Samplef, 0, 0);
-//	writeWord(L_Samplef, 1, 0);
+	//	writeWord(L_Samplef, 0, 0);
+	//	writeWord(L_Samplef, 1, 0);
 	writeWord(L_Samplef, 0, 4);
 	writeWord(L_Samplef, 1, 4);
-	HAL_GPIO_WritePin(TEST_GPIO_Port, TEST_Pin, 0);
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-//	for(int i=0; i<strlen(data_serial_rx); i++){
-//		data_serial_rx[i] = 0;
-//	}
+	//	for(int i=0; i<strlen(data_serial_rx); i++){
+	//		data_serial_rx[i] = 0;
+	//	}
 
 	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
 }

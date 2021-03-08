@@ -604,7 +604,7 @@ void Display_DrawFilledCircle(int16_t x0, int16_t y0, int16_t r, SSD1306_COLOR_t
 
 
 
-void SSD1306_Clear (void)
+void Display_Clear(void)
 {
 	Display_Fill (0);
 	Display_UpdateScreen();

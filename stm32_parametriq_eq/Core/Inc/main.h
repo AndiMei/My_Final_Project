@@ -59,28 +59,36 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LED_Pin GPIO_PIN_1
-#define LED_GPIO_Port GPIOA
-#define TEST_Pin GPIO_PIN_2
-#define TEST_GPIO_Port GPIOA
-#define ENC_DT_Pin GPIO_PIN_9
-#define ENC_DT_GPIO_Port GPIOE
-#define ENC_SW_Pin GPIO_PIN_10
-#define ENC_SW_GPIO_Port GPIOE
-#define ENC_CLK_Pin GPIO_PIN_11
-#define ENC_CLK_GPIO_Port GPIOE
+#define I2S_EN_Pin GPIO_PIN_5
+#define I2S_EN_GPIO_Port GPIOC
+#define LED_Pin GPIO_PIN_13
+#define LED_GPIO_Port GPIOB
+#define TP_D_Pin GPIO_PIN_14
+#define TP_D_GPIO_Port GPIOB
+#define TP_C_Pin GPIO_PIN_15
+#define TP_C_GPIO_Port GPIOB
+#define TP_B_Pin GPIO_PIN_8
+#define TP_B_GPIO_Port GPIOD
+#define TP_A_Pin GPIO_PIN_9
+#define TP_A_GPIO_Port GPIOD
 #define R_SIGN_Pin GPIO_PIN_0
 #define R_SIGN_GPIO_Port GPIOD
 #define L_SIGN_Pin GPIO_PIN_1
 #define L_SIGN_GPIO_Port GPIOD
-#define SW_RIGHT_Pin GPIO_PIN_2
-#define SW_RIGHT_GPIO_Port GPIOD
-#define SW_LEFT_Pin GPIO_PIN_3
-#define SW_LEFT_GPIO_Port GPIOD
-#define SW_DOWN_Pin GPIO_PIN_4
-#define SW_DOWN_GPIO_Port GPIOD
-#define SW_UP_Pin GPIO_PIN_5
+#define SW_UP_Pin GPIO_PIN_2
 #define SW_UP_GPIO_Port GPIOD
+#define SW_DOWN_Pin GPIO_PIN_3
+#define SW_DOWN_GPIO_Port GPIOD
+#define SW_LEFT_Pin GPIO_PIN_4
+#define SW_LEFT_GPIO_Port GPIOD
+#define SW_RIGHT_Pin GPIO_PIN_5
+#define SW_RIGHT_GPIO_Port GPIOD
+#define ENC_SW_Pin GPIO_PIN_3
+#define ENC_SW_GPIO_Port GPIOB
+#define ENC_CLK_Pin GPIO_PIN_4
+#define ENC_CLK_GPIO_Port GPIOB
+#define ENC_DT_Pin GPIO_PIN_5
+#define ENC_DT_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

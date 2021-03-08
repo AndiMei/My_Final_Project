@@ -114,7 +114,7 @@ void SSD1306_Stopscroll(void);
 void SSD1306_InvertDisplay (int i);
 
 /* clear the display */
-void SSD1306_Clear (void);
+void Display_Clear (void);
 
 
 #endif /* INC_MYOLED_H_ */
