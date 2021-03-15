@@ -1,4 +1,6 @@
 "Core/Src/main.o"
+"Core/Src/myConverter.o"
+"Core/Src/myEEPROM.o"
 "Core/Src/myFilter.o"
 "Core/Src/myFonts.o"
 "Core/Src/myIIR.o"

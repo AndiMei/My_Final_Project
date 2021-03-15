@@ -30,8 +30,10 @@
 #include "myOled.h"
 #include "myFonts.h"
 #include "mySwitch.h"
+#include "myEEPROM.h"
 #include "string.h"
 #include "stdlib.h"
+
 
 /* USER CODE END Includes */
 
@@ -44,7 +46,7 @@
 /* USER CODE BEGIN PD */
 #define BLOCK_SIZE 4
 #define FREQSAMPLING 48000
-
+float cobafloat;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,6 +56,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+//I2C_HandleTypeDef hi2c3;
 
 I2S_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_rx;
@@ -65,9 +68,13 @@ DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 
-enum state0{home_dis, home, setting_dis, setting , save_dis, save} myState;
-enum state1{l_gain_dis, l_gain, r_gain_dis, r_gain} state_home;
-
+//enum state0{home_dis, home, setting_dis, setting , save_dis, save} myState;
+//enum state1{preset_dis, l_gain_dis, l_gain, r_gain_dis, r_gain, not_select} state_home;
+enum state2{
+	start, display_home, preset, l_level, r_level, save, display_setting,
+	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw
+}state_home;
+//int8_t last_state = 1;
 uint32_t L_Buff = 0;
 uint32_t R_Buff = 0;
 
@@ -105,22 +112,35 @@ char *token;
 char delim[2] = "#";
 char *array[16];
 
-int8_t EQ_level_R, EQ_level_L;
+#define MAX_PRESET	10
+#define MAX_BAND	5
+
 int8_t EQ_preset;
-int8_t EQ_channel;
+
+//int8_t EQ_level_R[MAX_PRESET];
+//int8_t EQ_level_L[MAX_PRESET];
+
 int8_t EQ_band;
-float EQ_gain;
-int32_t EQ_fc;
-float32_t EQ_Q;
 
-char angkaF[] = "-12.349";
-float angka_f;
+//float EQ_gain[MAX_PRESET][MAX_BAND];
+//int32_t EQ_fc[MAX_PRESET][MAX_BAND];
+//int16_t EQ_Q[MAX_PRESET][MAX_BAND];
 
-char gain[7];
-_Bool coba = 1;
+struct EQ{
 
+	int8_t level_R;
+	int8_t level_L;
 
+	float gain_R[MAX_BAND];
+	float gain_L[MAX_BAND];
 
+	uint32_t fc_R[MAX_BAND];
+	uint32_t fc_L[MAX_BAND];
+
+	int8_t bw_R[MAX_BAND-2];
+	int8_t bw_L[MAX_BAND-2];
+};
+struct EQ myPreset[MAX_PRESET];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -130,8 +150,10 @@ static void MX_I2S2_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_I2C3_Init(void);
 /* USER CODE BEGIN PFP */
-
+void saveToEeprom(void);
+void LoadFromEeprom(void);
 //result_float = 0.0f;
 
 float readWord(_Bool ch, uint8_t buffer){
@@ -181,24 +203,812 @@ void writeWord(float dataf, _Bool ch, uint8_t buffer){
 }
 
 
+//float jajal = 8.123f;
+//void Flash_Write(uint32_t flash_addr, uint32_t flash_data){
+//
+//	HAL_FLASH_Unlock();
+//	FLASH_Erase_Sector(FLASH_SECTOR_11, VOLTAGE_RANGE_3);
+//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E0000, 0x11111111);
+//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E0004, *(uint32_t *)&jajal);
+//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E0008, 0xFFFFFFFF);
+//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E000C, 0xFFFFFFFF);
+//	HAL_FLASH_Lock();
+//}
+//
+//uint32_t Flash_Read(uint32_t flash_addr){
+//	uint32_t flash_data;
+//	flash_data = *(uint32_t*) flash_addr;
+//	return flash_data;
+//}
 
-void Flash_Write(uint32_t flash_addr, uint32_t flash_data){
-	HAL_FLASH_Unlock();
-	FLASH_Erase_Sector(FLASH_SECTOR_11, VOLTAGE_RANGE_3);
-	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, flash_addr, flash_data);
-	HAL_FLASH_Lock();
+//case preset_dis:
+//				/* update tampilan preset */
+//				Display_DrawRectangle(0, 0, 128, 12, 1);
+//				Display_GotoXY(32, 2);
+//				Display_Puts("PRESET ", &Font_7x10, 1);
+//				Display_PutUint(EQ_preset, 1,&Font_7x10 , 1);
+//				Display_UpdateScreen();
+//				state_home = last_state;
+//				break;
+//
+//			case not_select:
+//				Display_DrawFilledRectangle(0, 17, 128, 21, 0);
+//				Display_DrawRectangle(0, 17, 61, 21, 1);
+//				Display_GotoXY(7, 19);
+//				Display_PutUint(EQ_level_L[EQ_preset], 3, &Font_11x18, 1);
+//				Display_Putc('%', &Font_11x18, 1);
+//				Display_DrawFilledRectangle(66, 17, 61, 21, 1);
+//				Display_GotoXY(73, 19);
+//				Display_PutUint(EQ_level_R[EQ_preset], 3, &Font_11x18, 0);
+//				Display_Putc('%', &Font_11x18, 0);
+//				Display_UpdateScreen();
+
+void myTask(void){
+	/* parameter home_page */
+	static _Bool preset_selected = 1;
+	static _Bool l_selected = 0;
+	static _Bool r_selected = 0;
+
+	/* parameter advanced */
+	static _Bool band_selected = 1;
+	static _Bool l_gain_selected = 0;
+	static _Bool r_gain_selected = 0;
+	static _Bool l_fc_selected = 0;
+	static _Bool r_fc_selected = 0;
+	static _Bool l_bw_selected = 0;
+	static _Bool r_bw_selected = 0;
+
+	static uint8_t last_state = preset;
+
+	switch(state_home){
+	case start:
+		Display_GotoXY(6, 2);
+		Display_Puts("Selamat Datang ", &Font_7x10, 1);
+		Display_UpdateScreen();
+		/* Baca preset dari EEPROM */
+		LoadFromEeprom();
+		HAL_Delay(1000);
+		state_home = display_home;
+		break;
+	case display_home:
+		/* clear baris 1 */
+		Display_DrawFilledRectangle(0, 0, 128, 12, 0);
+		/* tampilan preset */
+		preset_selected? Display_DrawFilledRectangle(0, 0, 128, 12, 1) : Display_DrawRectangle(0, 0, 128, 12, 1);
+		Display_GotoXY((128-(8*7))/2, 2);
+		Display_Puts("PRESET ", &Font_7x10, !preset_selected);
+		Display_PutUint(EQ_preset,&Font_7x10 , !preset_selected);
+		/* clear baris 2 */
+		Display_DrawFilledRectangle(0, 17, 128, 21, 0);
+
+		/* tampilan L level */
+		l_selected? Display_DrawFilledRectangle(0, 17, 61, 21, 1) : Display_DrawRectangle(0, 17, 61, 21, 1);
+		if(myPreset[EQ_preset].level_L >= 100)	Display_GotoXY((61-(11*4))/2, 19);
+		else if(myPreset[EQ_preset].level_L >= 10)	Display_GotoXY((61-(11*3))/2, 19);
+		else Display_GotoXY((61-(11*2))/2, 19);
+		Display_PutUint(myPreset[EQ_preset].level_L, &Font_11x18, !l_selected);
+		Display_Putc('%', &Font_11x18, !l_selected);
+
+		/* tampilan R level */
+		r_selected? Display_DrawFilledRectangle(66, 17, 61, 21, 1) : Display_DrawRectangle(66, 17, 61, 21, 1);
+		if(myPreset[EQ_preset].level_R >= 100)	Display_GotoXY(66+(61-(11*4))/2, 19);
+		else if(myPreset[EQ_preset].level_R >= 10)	Display_GotoXY(66+(61-(11*3))/2, 19);
+		else Display_GotoXY(66+(61-(11*2))/2, 19);
+		Display_PutUint(myPreset[EQ_preset].level_R, &Font_11x18, !r_selected);
+		Display_Putc('%', &Font_11x18, !r_selected);
+
+		/* Update semua layar */
+		Display_UpdateScreen();
+		state_home = last_state;
+
+		break;
+
+	case preset:
+		if(switchUp()){
+			preset_selected = 0;
+			l_selected = 0;
+			r_selected = 1;
+			state_home = save;
+			last_state = r_level;
+		}
+		else if(switchDown()){
+			preset_selected = 0;
+			l_selected = 1;
+			r_selected = 0;
+			state_home = save;
+			last_state = l_level;
+		}
+		else if(switchRight()){
+			EQ_preset++;
+			if(EQ_preset>9) EQ_preset=0;
+			preset_selected = 1;
+			l_selected = 0;
+			r_selected = 0;
+			state_home = display_home;
+			last_state = preset;
+		}
+		else if(switchLeft()){
+			EQ_preset--;
+			if(EQ_preset<0) EQ_preset=9;
+			preset_selected = 1;
+			l_selected = 0;
+			r_selected = 0;
+			state_home = display_home;
+			last_state = preset;
+		}
+		else if(switchEncoder()==1){
+			state_home = display_setting;
+			last_state = band;
+			Display_Clear();
+		}
+
+		break;
+
+	case l_level:
+		if(encoderCW()){
+			myPreset[EQ_preset].level_L += 1;
+			if(myPreset[EQ_preset].level_L >= 100) myPreset[EQ_preset].level_L=100;
+			state_home = display_home;
+			last_state = l_level;
+		}
+		if(encoderCCW()){
+			myPreset[EQ_preset].level_L -= 1;
+			if(myPreset[EQ_preset].level_L < 0) myPreset[EQ_preset].level_L=0;
+			state_home = display_home;
+			last_state = l_level;
+		}
+		if(switchUp()){
+			preset_selected = 1;
+			l_selected = 0;
+			r_selected = 0;
+			state_home = save;
+			last_state = preset;
+		}
+		else if(switchDown()){
+			preset_selected = 0;
+			l_selected = 0;
+			r_selected = 1;
+			state_home = save;
+			last_state = r_level;
+		}
+		break;
+
+	case r_level:
+		if(encoderCW()){
+			myPreset[EQ_preset].level_R += 1;
+			if(myPreset[EQ_preset].level_R >= 100) myPreset[EQ_preset].level_R=100;
+			state_home = display_home;
+			last_state = r_level;
+		}
+		if(encoderCCW()){
+			myPreset[EQ_preset].level_R -= 1;
+			if(myPreset[EQ_preset].level_R < 0) myPreset[EQ_preset].level_R=0;
+			state_home = display_home;
+			last_state = r_level;
+		}
+		if(switchUp()){
+			preset_selected = 0;
+			l_selected = 1;
+			r_selected = 0;
+			state_home = save;
+			last_state = l_level;
+		}
+		else if(switchDown()){
+			preset_selected = 1;
+			l_selected = 0;
+			r_selected = 0;
+			state_home = save;
+			last_state = preset;
+		}
+		if(switchEncoder()==1){
+			state_home = save;
+			last_state = preset;
+		}
+		break;
+
+	case save:
+		Display_GotoXY(3, 50);
+		Display_Puts("Saved !", &Font_7x10, 1);
+		/* Update semua layar */
+		Display_UpdateScreen();
+		/* Simpan data di EEPROM */
+		saveToEeprom();
+		/* clear baris 3 */
+		Display_DrawFilledRectangle(0, 49, 128, 12, 0);
+		Display_UpdateScreen();
+		state_home = display_home;
+		break;
+
+	case display_setting:
+		/* clear baris 1 */
+		Display_DrawFilledRectangle(0, 0, 128, 12, 0);
+		/* tampilan band */
+		band_selected? Display_DrawFilledRectangle(0, 0, 128, 12, 1) : Display_DrawRectangle(0, 0, 128, 12, 1);
+		switch(EQ_band){
+		case 0:
+			Display_GotoXY((128-7*8)/2, 2);
+			Display_Puts("LOW FREQ", &Font_7x10, !band_selected); break;
+		case 1:
+			Display_GotoXY((128-7*12)/2, 2);
+			Display_Puts("LOW-MID FREQ", &Font_7x10, !band_selected); break;
+		case 2:
+			Display_GotoXY((128-7*8)/2, 2);
+			Display_Puts("MID FREQ", &Font_7x10, !band_selected); break;
+		case 3:
+			Display_GotoXY((128-7*13)/2, 2);
+			Display_Puts("MID-HIGH FREQ", &Font_7x10, !band_selected); break;
+		case 4:
+			Display_GotoXY((128-7*9)/2, 2);
+			Display_Puts("HIGH FREQ", &Font_7x10, !band_selected); break;
+		}
+
+		/* clear baris 2 */
+		Display_DrawFilledRectangle(0, 17, 128, 12, 0);
+		/* tampilan gain L */
+		l_gain_selected? Display_DrawFilledRectangle(0, 17, 61, 12, 1) : Display_DrawRectangle(0, 17, 61, 12, 1);
+		if(myPreset[EQ_preset].gain_L[EQ_band]>=10) Display_GotoXY((61-7*6)/2, 19);
+		else if(myPreset[EQ_preset].gain_L[EQ_band]>=0) Display_GotoXY((61-7*5)/2, 19);
+		else if(myPreset[EQ_preset].gain_L[EQ_band]>= -10) Display_GotoXY((61-7*6)/2, 19);
+		else Display_GotoXY((61-7*7)/2, 19);
+		Display_PutFloat(myPreset[EQ_preset].gain_L[EQ_band], 1, &Font_7x10, !l_gain_selected);
+		Display_Puts("dB", &Font_7x10, !l_gain_selected);
+
+		/* tampilan gain R */
+		r_gain_selected? Display_DrawFilledRectangle(66, 17, 61, 12, 1) : Display_DrawRectangle(66, 17, 61, 12, 1);
+		if(myPreset[EQ_preset].gain_R[EQ_band]>=10) Display_GotoXY(66+(61-7*6)/2, 19);
+		else if(myPreset[EQ_preset].gain_R[EQ_band]>=0) Display_GotoXY(66+(61-7*5)/2, 19);
+		else if(myPreset[EQ_preset].gain_R[EQ_band]>= -10) Display_GotoXY(66+(61-7*6)/2, 19);
+		else Display_GotoXY(66+(61-7*7)/2, 19);
+		Display_PutFloat(myPreset[EQ_preset].gain_R[EQ_band], 1, &Font_7x10, !r_gain_selected);
+		Display_Puts("dB", &Font_7x10, !r_gain_selected);
+
+		/* clear baris 3 */
+		Display_DrawFilledRectangle(0, 34, 128, 12, 0);
+		/* tampilan fc L */
+		l_fc_selected? Display_DrawFilledRectangle(0, 34, 61, 12, 1) : Display_DrawRectangle(0, 34, 61, 12, 1);
+		if(myPreset[EQ_preset].fc_L[EQ_band] >= 10000){
+			Display_GotoXY((61-7*8)/2, 36);
+			Display_PutFloatDigit((float)myPreset[EQ_preset].fc_L[EQ_band]/1000.0f, 2, 2, &Font_7x10, !l_fc_selected);
+			Display_Puts("kHz", &Font_7x10, !l_fc_selected);
+		}
+		else if(myPreset[EQ_preset].fc_L[EQ_band] >= 1000){
+			Display_GotoXY((61-7*7)/2, 36);
+			Display_PutFloatDigit((float)myPreset[EQ_preset].fc_L[EQ_band]/1000.0f, 1, 2, &Font_7x10, !l_fc_selected);
+			Display_Puts("kHz", &Font_7x10, !l_fc_selected);
+		}
+		else if(myPreset[EQ_preset].fc_L[EQ_band] >= 100){
+			Display_GotoXY((61-7*5)/2, 36);
+			Display_PutInt(myPreset[EQ_preset].fc_L[EQ_band], 3,0, &Font_7x10, !l_fc_selected);
+			Display_Puts("Hz", &Font_7x10, !l_fc_selected);
+		}
+		else{
+			Display_GotoXY((61-7*4)/2, 36);
+			Display_PutInt(myPreset[EQ_preset].fc_L[EQ_band], 2,0, &Font_7x10, !l_fc_selected);
+			Display_Puts("Hz", &Font_7x10, !l_fc_selected);
+		}
+
+		/* tampilan fc R */
+		r_fc_selected? Display_DrawFilledRectangle(66, 34, 61, 12, 1) : Display_DrawRectangle(66, 34, 61, 12, 1);
+		Display_GotoXY(69, 36);
+		if(myPreset[EQ_preset].fc_R[EQ_band] >= 10000){
+			Display_GotoXY(66+(61-7*8)/2, 36);
+			Display_PutFloatDigit((float)myPreset[EQ_preset].fc_R[EQ_band]/1000.0f, 2, 2, &Font_7x10, !r_fc_selected);
+			Display_Puts("kHz", &Font_7x10, !r_fc_selected);
+		}
+		else if(myPreset[EQ_preset].fc_R[EQ_band] >= 1000){
+			Display_GotoXY(66+(61-7*7)/2, 36);
+			Display_PutFloatDigit((float)myPreset[EQ_preset].fc_R[EQ_band]/1000.0f, 1, 2, &Font_7x10, !r_fc_selected);
+			Display_Puts("kHz", &Font_7x10, !r_fc_selected);
+		}
+		else if(myPreset[EQ_preset].fc_R[EQ_band] >= 100){
+			Display_GotoXY(66+(61-7*5)/2, 36);
+			Display_PutInt(myPreset[EQ_preset].fc_R[EQ_band], 3,0, &Font_7x10, !r_fc_selected);
+			Display_Puts("Hz", &Font_7x10, !r_fc_selected);
+		}
+		else{
+			Display_GotoXY(66+(61-7*4)/2, 36);
+			Display_PutInt(myPreset[EQ_preset].fc_R[EQ_band], 2,0, &Font_7x10, !r_fc_selected);
+			Display_Puts("Hz", &Font_7x10, !r_fc_selected);
+		}
+
+		/* clear baris 3 */
+		Display_DrawFilledRectangle(0, 51, 128, 12, 0);
+		/* tampilan bw L */
+		l_bw_selected? Display_DrawFilledRectangle(0, 51, 61, 12, 1) : Display_DrawRectangle(0, 51, 61, 12, 1);
+		if(myPreset[EQ_preset].bw_L[EQ_band] >= 100)	Display_GotoXY((61-(7*4))/2, 53);
+		else if(myPreset[EQ_preset].bw_L[EQ_band] >= 10)	Display_GotoXY((61-(7*3))/2, 53);
+		else Display_GotoXY((61-(7*2))/2, 53);
+		Display_PutUint(myPreset[EQ_preset].bw_L[EQ_band], &Font_7x10, !l_bw_selected);
+		Display_Puts("%", &Font_7x10, !l_bw_selected);
+
+		/* tampilan bw R */
+		r_bw_selected? Display_DrawFilledRectangle(66, 51, 61, 12, 1) : Display_DrawRectangle(66, 51, 61, 12, 1);
+		if(myPreset[EQ_preset].bw_R[EQ_band] >= 100)	Display_GotoXY(66+(61-(7*4))/2, 53);
+		else if(myPreset[EQ_preset].bw_R[EQ_band] >= 10)	Display_GotoXY(66+(61-(7*3))/2, 53);
+		else Display_GotoXY(66+(61-(7*2))/2, 53);
+		Display_PutUint(myPreset[EQ_preset].bw_R[EQ_band], &Font_7x10, !r_bw_selected);
+		Display_Puts("%", &Font_7x10, !r_bw_selected);
+
+//		if(EQ_band<1 || EQ_band>3) Display_DrawFilledRectangle(0, 51, 128, 12, 0);
+
+		/* update screen */
+		Display_UpdateScreen();
+		state_home = last_state;
+		break;
+
+	case band:
+		if(encoderCW()){
+			EQ_band++;
+			if(EQ_band>4) EQ_band = 0;
+			state_home = display_setting;
+			last_state = band;
+		}
+		if(encoderCCW()){
+			EQ_band--;
+			if(EQ_band<0) EQ_band = 4;
+			state_home = display_setting;
+			last_state = band;
+		}
+		if(switchEncoder()){
+			state_home = display_home;
+			last_state = preset;
+			Display_Clear();
+		}
+		if(switchLeft()){
+			band_selected = 0;
+			l_gain_selected = 1;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_gain;
+		}
+		else if(switchRight()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 1;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = r_gain;
+		}
+		break;
+
+	case l_gain:
+		if(encoderCW()){
+			myPreset[EQ_preset].gain_L[EQ_band] += 0.1;
+			if(myPreset[EQ_preset].gain_L[EQ_band] > 12.0){
+				myPreset[EQ_preset].gain_L[EQ_band] = -12.0;
+			}
+			state_home = display_setting;
+			last_state = l_gain;
+		}
+		if(encoderCCW()){
+			myPreset[EQ_preset].gain_L[EQ_band] -= 0.1;
+			if(myPreset[EQ_preset].gain_L[EQ_band] < -12.0){
+				myPreset[EQ_preset].gain_L[EQ_band] = 12.0;
+			}
+			state_home = display_setting;
+			last_state = l_gain;
+		}
+
+		if(switchUp()){
+			band_selected = 1;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = band;
+		}
+		else if(switchDown()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 1;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_fc;
+		}
+		else if(switchLeft() || switchRight()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 1;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = r_gain;
+		}
+		break;
+
+	case r_gain:
+		if(encoderCW()){
+			myPreset[EQ_preset].gain_R[EQ_band] += 0.1;
+			if(myPreset[EQ_preset].gain_R[EQ_band] > 12.0){
+				myPreset[EQ_preset].gain_R[EQ_band] = -12.0;
+			}
+			state_home = display_setting;
+			last_state = r_gain;
+		}
+		if(encoderCCW()){
+			myPreset[EQ_preset].gain_R[EQ_band] -= 0.1;
+			if(myPreset[EQ_preset].gain_R[EQ_band] < -12.0){
+				myPreset[EQ_preset].gain_R[EQ_band] = 12.0;
+			}
+			state_home = display_setting;
+			last_state = r_gain;
+		}
+		if(switchUp()){
+			band_selected = 1;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = band;
+		}
+		else if(switchDown()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 1;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = r_fc;
+		}
+		else if(switchLeft() || switchRight()){
+			band_selected = 0;
+			l_gain_selected = 1;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_gain;
+		}
+		break;
+
+	case l_fc:
+		if(encoderCW()){
+			if(myPreset[EQ_preset].fc_L[EQ_band] >= 1000){
+				myPreset[EQ_preset].fc_L[EQ_band] += 100.0000000f;
+			}
+			else if(myPreset[EQ_preset].fc_L[EQ_band] >= 100){
+				myPreset[EQ_preset].fc_L[EQ_band] += 10.0000000f;
+			}
+			else{
+				myPreset[EQ_preset].fc_L[EQ_band] += 1.0000000f;
+			}
+
+			if(myPreset[EQ_preset].fc_L[EQ_band] > 16000){
+				myPreset[EQ_preset].fc_L[EQ_band] = 50;
+			}
+
+			state_home = display_setting;
+			last_state = l_fc;
+		}
+		if(encoderCCW()){
+			if(myPreset[EQ_preset].fc_L[EQ_band] >= 1000){
+				myPreset[EQ_preset].fc_L[EQ_band] -= 100.0000000f;
+			}
+			else if(myPreset[EQ_preset].fc_L[EQ_band] >= 100){
+				myPreset[EQ_preset].fc_L[EQ_band] -= 10.0000000f;
+			}
+			else{
+				myPreset[EQ_preset].fc_L[EQ_band] -= 1.0000000f;
+			}
+
+			if(myPreset[EQ_preset].fc_L[EQ_band] < 50){
+				myPreset[EQ_preset].fc_L[EQ_band] = 16000;
+			}
+			state_home = display_setting;
+			last_state = l_fc;
+		}
+		if(switchUp()){
+			band_selected = 0;
+			l_gain_selected = 1;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_gain;
+		}
+		else if(switchDown()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 1;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_bw;
+		}
+		else if(switchLeft() || switchRight()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 1;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = r_fc;
+		}
+		break;
+
+	case r_fc:
+		if(encoderCW()){
+			if(myPreset[EQ_preset].fc_R[EQ_band] >= 1000){
+				myPreset[EQ_preset].fc_R[EQ_band] += 100;
+			}
+			else if(myPreset[EQ_preset].fc_R[EQ_band] >= 100){
+				myPreset[EQ_preset].fc_R[EQ_band] += 10;
+			}
+			else{
+				myPreset[EQ_preset].fc_R[EQ_band] += 1;
+			}
+
+			if(myPreset[EQ_preset].fc_R[EQ_band] > 16000){
+				myPreset[EQ_preset].fc_R[EQ_band] = 50;
+			}
+
+			state_home = display_setting;
+			last_state = r_fc;
+		}
+		if(encoderCCW()){
+			if(myPreset[EQ_preset].fc_R[EQ_band] >= 1000){
+				myPreset[EQ_preset].fc_R[EQ_band] -= 100;
+			}
+			else if(myPreset[EQ_preset].fc_R[EQ_band] >= 100){
+				myPreset[EQ_preset].fc_R[EQ_band] -= 10;
+			}
+			else{
+				myPreset[EQ_preset].fc_R[EQ_band] -= 1;
+			}
+
+			if(myPreset[EQ_preset].fc_R[EQ_band] < 50){
+				myPreset[EQ_preset].fc_R[EQ_band] = 16000;
+			}
+			state_home = display_setting;
+			last_state = r_fc;
+		}
+		if(switchUp()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 1;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = r_gain;
+		}
+		else if(switchDown()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 1;
+
+			state_home = display_setting;
+			last_state = r_bw;
+		}
+		else if(switchLeft() || switchRight()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 1;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_fc;
+		}
+		break;
+
+	case l_bw:
+		if(encoderCW()){
+			myPreset[EQ_preset].bw_L[EQ_band] += 1;
+			if(myPreset[EQ_preset].bw_L[EQ_band] > 100){
+				myPreset[EQ_preset].bw_L[EQ_band] = 0;
+			}
+			state_home = display_setting;
+			last_state = l_bw;
+		}
+		if(encoderCCW()){
+			myPreset[EQ_preset].bw_L[EQ_band] -= 1;
+			if(myPreset[EQ_preset].bw_L[EQ_band] < 0){
+				myPreset[EQ_preset].bw_L[EQ_band] = 100;
+			}
+			state_home = display_setting;
+			last_state = l_bw;
+		}
+		if(switchUp()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 1;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_fc;
+		}
+		else if(switchDown()){
+			band_selected = 1;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = band;
+		}
+		else if(switchLeft() || switchRight()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 1;
+
+			state_home = display_setting;
+			last_state = r_bw;
+		}
+		break;
+
+	case r_bw:
+		if(encoderCW()){
+			myPreset[EQ_preset].bw_R[EQ_band] += 1;
+			if(myPreset[EQ_preset].bw_R[EQ_band] > 100){
+				myPreset[EQ_preset].bw_R[EQ_band] = 0;
+			}
+			state_home = display_setting;
+			last_state = r_bw;
+		}
+		if(encoderCCW()){
+			myPreset[EQ_preset].bw_R[EQ_band] -= 1;
+			if(myPreset[EQ_preset].bw_R[EQ_band] < 0){
+				myPreset[EQ_preset].bw_R[EQ_band] = 100;
+			}
+			state_home = display_setting;
+			last_state = r_bw;
+		}
+		if(switchUp()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 1;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = r_fc;
+		}
+		else if(switchDown()){
+			band_selected = 1;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 0;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = band;
+		}
+		else if(switchLeft() || switchRight()){
+			band_selected = 0;
+			l_gain_selected = 0;
+			r_gain_selected = 0;
+			l_fc_selected = 0;
+			r_fc_selected = 0;
+			l_bw_selected = 1;
+			r_bw_selected = 0;
+
+			state_home = display_setting;
+			last_state = l_bw;
+		}
+		break;
+	}
 }
-
-uint32_t Flash_Read(uint32_t flash_addr){
-	uint32_t flash_data;
-	flash_data = *(uint32_t*) flash_addr;
-	return flash_data;
-}
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t selectAddr[2] ={0x00, 0x00};
+uint8_t cobaKirim[3] = {25, 5, 15};
+uint8_t cobaTerima[5];
+uint8_t flag = 0;
+
+//struct Coba{
+//	uint16_t andi;
+//	int8_t meong;
+////	uint8_t mei[3];
+////	int8_t pras;
+//	float pipi;
+//};
+
+
+
+struct EQ2{
+
+	int8_t level_R;
+	int8_t level_L;
+
+	float32_t gain_R[MAX_BAND];
+	float gain_L[MAX_BAND];
+
+	uint32_t fc_R[MAX_BAND];
+	uint32_t fc_L[MAX_BAND];
+
+	uint8_t bw_R[MAX_BAND];
+	uint8_t bw_L[MAX_BAND];
+};
+
+
+struct EQ2 myPreset2[MAX_PRESET];
+
+//void EEPROM_save(uint8_t pData){
+//	uint8_t lengthData = sizeof(pData);
+//	static uint8_t buff[lengthData];
+//
+//	if(lengthData<32){
+//		f
+//	}
+//}
+
+//uint16_t bytesToWrite(uint16_t size, uint16_t offset){
+//	if((size+offset)<32){
+//		return size;
+//	} else{
+//		return 32 - offset;
+//	}
+//}
+
+//int ukuran;
+//uint16_t andi2;
+//int8_t meong2;
+//float pipi2;
+
 
 /* USER CODE END 0 */
 
@@ -227,6 +1037,7 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 	__HAL_RCC_DMA1_CLK_ENABLE();
+//	__HAL_RCC_I2C3_CLK_ENABLE();
 
   /* USER CODE END SysInit */
 
@@ -236,85 +1047,88 @@ int main(void)
   MX_DMA_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
+  MX_I2C3_Init();
   /* USER CODE BEGIN 2 */
 
 	//  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
 
+//	Display_Init();
 	Display_Init();
-	//	Display_GotoXY(0, 0);
-	//	Display_Puts("ANDI", &Font_11x18, 1);
-	//	Display_GotoXY(13, 30);
-	//	Display_Angka3u(123, &Font_11x18, 1);
-	//	Display_GotoXY(13, 50);
-	//	Display_Puts("Prasetyo", &Font_7x10, 1);
-	//	Display_UpdateScreen();
-
-	// 5 huruf 18 huruf
-	Display_DrawRectangle(0, 0, 61, 12, 1);
-	Display_GotoXY(3, 2); Display_Puts("PRESET 9", &Font_7x10, 1);
-	Display_DrawRectangle(66, 0, 61, 12, 1);
-	Display_GotoXY(69, 2); Display_Puts("BAND 5", &Font_7x10, 1);
-
-	//	Display_DrawRectangle(0, 17, 61, 12, 1);
-	Display_DrawFilledRectangle(0, 17, 61, 12, 1);
-	Display_GotoXY(3, 19); Display_Puts("-12.0 dB", &Font_7x10, 0);
-	Display_DrawRectangle(66, 17, 61, 12, 1);
-	Display_GotoXY(69, 19); Display_Puts("+12.0 dB", &Font_7x10, 1);
-	//	Display_GotoXY(5, 16); Display_Puts("BAND 3", &Font_7x10, 1);
-
-	Display_DrawRectangle(0, 34, 61, 12, 1);
-	Display_GotoXY(3, 36); Display_Puts("20 Hz", &Font_7x10, 1);
-	Display_DrawRectangle(66, 34, 61, 12, 1);
-	Display_GotoXY(69, 36); Display_Puts("20 kHz", &Font_7x10, 1);
-
-	Display_DrawRectangle(0, 51, 61, 12, 1);
-	Display_GotoXY(3, 53); Display_Puts("0.02", &Font_7x10, 1);
-	Display_DrawRectangle(66, 51, 61, 12, 1);
-	Display_GotoXY(69, 53); Display_Puts("1.00", &Font_7x10, 1);
-
-	//	Display_GotoXY(0, 11); Display_Puts("234567890234567892345", &Font_7x10, 1);
-	//	Display_GotoXY(0, 22); Display_Puts("234567890234567892345", &Font_7x10, 1);
-	//	Display_GotoXY(0, 33); Display_Puts("234567890234567892345", &Font_7x10, 1);
-	//	Display_GotoXY(0, 44); Display_Puts("234567890234567892345", &Font_7x10, 1);
-	//	Display_GotoXY(0, 55); Display_Puts("234567890234567892345", &Font_7x10, 1);
-
-	Display_UpdateScreen();
-
-	HAL_Delay(2000);
-	Display_Clear();
-
-	/* Hitung koefisien filter Kanan */
-	shelv(&R_cS1[0], 0, 0, 100, FREQSAMPLING);
-	peak(&R_cS2[0], 0, 300, 50, FREQSAMPLING);
-	peak(&R_cS3[0], 0, 1000, 50, FREQSAMPLING);
-	peak(&R_cS4[0], 0, 5000, 50, FREQSAMPLING);
-	shelv(&R_cS5[0], 1, 0, 12000, FREQSAMPLING);
-
-	/* Hitung koefisien filter kiri */
-	shelv(&L_cS1[0], 0, 0, 100, FREQSAMPLING);
-	peak(&L_cS2[0], 0, 300, 50, FREQSAMPLING);
-	peak(&L_cS3[0], 0, 1000, 50, FREQSAMPLING);
-	peak(&L_cS4[0], 0, 5000, 50, FREQSAMPLING);
-	shelv(&L_cS5[0], 1, 0, 12000, FREQSAMPLING);
-
-	/* DMA I2S dimulai */
-	HAL_I2SEx_TransmitReceive_DMA(&hi2s2, txBuff, rxBuff, BLOCK_SIZE);
-
+		Display_GotoXY(0, 0);
+		Display_Puts("ANDI", &Font_11x18, 1);
+		Display_GotoXY(13, 30);
+//		Display_Angka3u(123, &Font_11x18, 1);
+//		Display_GotoXY(13, 50);
+		Display_Puts("Prasetyo", &Font_7x10, 1);
+		Display_UpdateScreen();
+		HAL_Delay(2000);
+//
+//	// 5 huruf 18 huruf
+//	Display_DrawRectangle(0, 0, 61, 12, 1);
+//	Display_GotoXY(3, 2); Display_Puts("PRESET 9", &Font_7x10, 1);
+//	Display_DrawRectangle(66, 0, 61, 12, 1);
+//	Display_GotoXY(69, 2); Display_Puts("BAND 5", &Font_7x10, 1);
+//
+//	//	Display_DrawRectangle(0, 17, 61, 12, 1);
+//	Display_DrawFilledRectangle(0, 17, 61, 12, 1);
+//	Display_GotoXY(3, 19); Display_Puts("-12.0 dB", &Font_7x10, 0);
+//	Display_DrawRectangle(66, 17, 61, 12, 1);
+//	Display_GotoXY(69, 19); Display_Puts("+12.0 dB", &Font_7x10, 1);
+//	//	Display_GotoXY(5, 16); Display_Puts("BAND 3", &Font_7x10, 1);
+//
+//	Display_DrawRectangle(0, 34, 61, 12, 1);
+//	Display_GotoXY(3, 36); Display_Puts("20 Hz", &Font_7x10, 1);
+//	Display_DrawRectangle(66, 34, 61, 12, 1);
+//	Display_GotoXY(69, 36); Display_Puts("20 kHz", &Font_7x10, 1);
+//
+//	Display_DrawRectangle(0, 51, 61, 12, 1);
+//	Display_GotoXY(3, 53); Display_Puts("0.02", &Font_7x10, 1);
+//	Display_DrawRectangle(66, 51, 61, 12, 1);
+//	Display_GotoXY(69, 53); Display_Puts("1.00", &Font_7x10, 1);
+//
+//	//	Display_GotoXY(0, 11); Display_Puts("234567890234567892345", &Font_7x10, 1);
+//	//	Display_GotoXY(0, 22); Display_Puts("234567890234567892345", &Font_7x10, 1);
+//	//	Display_GotoXY(0, 33); Display_Puts("234567890234567892345", &Font_7x10, 1);
+//	//	Display_GotoXY(0, 44); Display_Puts("234567890234567892345", &Font_7x10, 1);
+//	//	Display_GotoXY(0, 55); Display_Puts("234567890234567892345", &Font_7x10, 1);
+//
+//	Display_UpdateScreen();
+//
+//	HAL_Delay(2000);
+//	Display_Clear();
+//
+//	/* Hitung koefisien filter Kanan */
+//	shelv(&R_cS1[0], 0, 0, 100, FREQSAMPLING);
+//	peak(&R_cS2[0], 0, 300, 50, FREQSAMPLING);
+//	peak(&R_cS3[0], 0, 1000, 50, FREQSAMPLING);
+//	peak(&R_cS4[0], 0, 5000, 50, FREQSAMPLING);
+//	shelv(&R_cS5[0], 1, 0, 12000, FREQSAMPLING);
+//
+//	/* Hitung koefisien filter kiri */
+//	shelv(&L_cS1[0], 0, 0, 100, FREQSAMPLING);
+//	peak(&L_cS2[0], 0, 300, 50, FREQSAMPLING);
+//	peak(&L_cS3[0], 0, 1000, 50, FREQSAMPLING);
+//	peak(&L_cS4[0], 0, 5000, 50, FREQSAMPLING);
+//	shelv(&L_cS5[0], 1, 0, 12000, FREQSAMPLING);
+//
+//	/* DMA I2S dimulai */
+//	HAL_I2SEx_TransmitReceive_DMA(&hi2s2, txBuff, rxBuff, BLOCK_SIZE);
+//
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	bakso[0] = 0xAA;
-	bakso[1] = 0x11;
-	bakso[2] = 0x01;
-
-		_Bool complete=0;
-	//  SSD1306_Clear();
-	//	HAL_UART_Transmit_DMA(&huart1, (uint8_t*)data_serial, strlen(data_serial));
-	//	HAL_UART_Receive_DMA(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx));
-	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
-
-	EQ_preset = atoi(strParamEQ[0]);
+//	bakso[0] = 0xAA;
+//	bakso[1] = 0x11;
+//	bakso[2] = 0x01;
+//
+////		_Bool complete=0;
+//	//  SSD1306_Clear();
+//	//	HAL_UART_Transmit_DMA(&huart1, (uint8_t*)data_serial, strlen(data_serial));
+//	//	HAL_UART_Receive_DMA(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx));
+//	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
+//
+//	EQ_preset = atoi(strParamEQ[0]);
 	//	EQ_fc = 20;
 	//	if(EQ_fc<0){
 	//		EQ_fc=-EQ_fc;
@@ -338,143 +1152,135 @@ int main(void)
 	//			    myLCD::Data((x%100)/10+0x30);      // menulis puluhan
 	//			    myLCD::Data(x%10+0x30);
 	//	Flash_Write(0x080E0000, 0xABCD1234);
-	cntVal = Flash_Read(0x080E0000);
+//	Flash_Write(0x080E0000, 0x11111111);
+//	Flash_Write(0x080E000C, 0x22222222);
+//	cntVal = Flash_Read(0x080E0000);
 
+
+//  	  myName[0].andi = 10;
+//  	  myName[1].mei[0] = 13;
+//  	  myName[2].mei[1] = 14;
+//  	  myName[3].mei[2] = 15;
+//  	  myName[4].pras  =11;
+//  	  myName[5].pipi = 18.23;
+//  	  myName jeneng;
+
+//  	jeneng.andi = 65535;
+//  	jeneng.meong = -9;
+//  	jeneng.pipi = 10.23;
+//  int size = sizeof(myName);
+//  unsigned char* pData;
+//  unsigned char eeprom[size];
+//  unsigned char pDataRecv[size];
+//  myName* read_back;
+//  pData = (unsigned char*)&jeneng;
+//  memcpy(eeprom, pData, size);
+//  uint8_t* addrOfStruct = (uint8_t*)(&jeneng);
+//  uint16_t sizeOfStruct = sizeof(myName);
+//  HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, addrOfStruct, sizeOfStruct, 100);
+////  uint16_t _andi ((myName*)eeprom)->andi;
+//  memcpy(pDataRecv, eeprom, size);
+//  read_back = (myName*)(pDataRecv);
+//  uint16_t andi2 = read_back->andi;
+//  int8_t meong2 = read_back->meong;
+//  float pipi2 = read_back->pipi;
+
+//  struct Coba jenengku[10];
+//  uint8_t* addrOfStruct = (uint8_t*)&jenengku;
+
+
+//  uint16_t sizeOfBuf = sizeof(myName);
+//  uint8_t receiveBuf[sizeOfBuf];
+//  myName* baca;
+
+//  myPreset[0].level_R = 25;
+//  myPreset[0].level_L = 15;
+//  myPreset[1].level_R = 12;
+//  myPreset[1].level_L = 4;
+
+//  myPreset
+//  EQ* baca;
+//
+//  /* kirim */
+
+//
+
+
+//
+//  uint8_t kirim32bit[32] = {
+//		  0,1,2,3,4,5,6,7,8,9,10,11,12,13,
+//		  14,15,16,17,18,19,20,21,22,23,24,25,
+//		  26,27,28,29,30,31
+//  };
+//
+//  uint8_t kirim32bit2[32] = {
+//  		  32,33,34,35,36,37,38,39,
+//		  40,41,42,43,44,45,46,47,48,49,
+//		  50,51,52,53,54,55,56,57,58,59,
+//		  60,61,62,63
+//  };
+//
+//  uint8_t terima32bit[32];
+//  uint8_t terima32bit2[32];
+//
+//  uint8_t kirim2bit[2] = {
+//		  32,33
+//  };
+//  uint8_t kirimen[128];
+//  uint8_t tomponen[128];
+//
+//  for(int i=0; i<128; i++){
+//	  kirimen[i] = i;
+//  }
+
+//  EEPROM_ErasePage(1);
+//  HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0, I2C_MEMADD_SIZE_16BIT, kirim32bit, sizeof(kirim32bit), 1000);
+//  HAL_Delay(50);
+//  HAL_I2C_Mem_Write(&hi2c3, 0xA0, 32, I2C_MEMADD_SIZE_16BIT, kirim32bit2, sizeof(kirim32bit2), 1000);
+//  HAL_Delay(50);
+
+    /* terima */
+
+	cobafloat = 2374/1000.0f;
 	while (1)
 	{
-//		switch (readEncoder()) {
-//		case 1:
-//			cntVal++;
-//			break;
-//		case 2:
-//			cntVal--;
-//			break;
-//		case 3:
-//			cntVal = 0;
+		myTask();
+//		 EEPROM_Read(0, 0, reciveBuff, sizeOfBuff);
 //
-//		}
-//		if(readEncoder()==1){
-//			cntVal++;
-//		}
-//		if(readEncoder()==2){
-//			cntVal--;
-//		}
-//		if(readEncoder()==3){
-//			cntVal=0;
-//		}
-//		if(switchEncoder()){
-//			cntVal=0;
-//		}
+//		memcpy(&myPreset2, reciveBuff, sizeof(myPreset2));
+//		EEPROM_Write(0, 0, kirimen, sizeof(kirimen));
+//		EEPROM_Read(0, 0, tomponen, sizeof(tomponen));
+//		HAL_Delay(1);
+//		HAL_I2C_Mem_Read(&hi2c3, 0xA0, 0, I2C_MEMADD_SIZE_16BIT, terima32bit, sizeof(terima32bit), 1000);
+//		HAL_Delay(50);
+//		HAL_I2C_Mem_Read(&hi2c3, 0xA0, 32, I2C_MEMADD_SIZE_16BIT, terima32bit2, sizeof(terima32bit2), 1000);
+//		HAL_Delay(50);
+//		baca = (EQ*)receiveBuf;
 //
-//		if(readEncoder()==1){
-//			cntVal++;
-//		}
-//		if(readEncoder()==2){
-//			cntVal--;
-//		}
-//
-//		if(switchUp()){
-//			cntVal++;
-//		}
-//		if(switchDown()){
-//			cntVal--;
-//		}
-//		if(switchLeft()){
-//			cntVal--;
-//		}
-//		if(switchRight()){
-//			cntVal++;
-//		}
+//		myName = baca->andi;
+//		meong2 = baca->meong;
+//		pipi2 = baca->pipi;
+//		HAL_I2C_Master_Transmit(&hi2c3, 0xA0, selectAddr, 2, 1000);
+//		HAL_Delay(1);
+//		HAL_I2C_Master_Receive(&hi2c3, 0xA0, cobaTerima, 5, 100);
+//		HAL_Delay(1);
+//		HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, cobaKirim, 3, 100);
+//		HAL_Delay(10);
+//		flag =  HAL_I2C_Mem_Read(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, cobaTerima, 5, 1000);
+//		HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_8BIT, cobaKirim, 3, 1000);
 
-		switch(myState){
-		case home_dis:
-			Display_DrawRectangle(0, 0, 128, 12, 1);
-			Display_GotoXY(32, 2); Display_Puts("PRESET 9", &Font_7x10, 1);
-			myState = home;
-			Display_UpdateScreen();
-			break;
+//		HAL_I2C_Mem_Read(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, cobaTerima, 5, 1000);
+//		HAL_Delay(10);
+//		HAL_I2C_Mem_Read(hi2c, DevAddress, MemAddress, MemAddSize, pData, Size, Timeout);
+//		HAL_I2C_Mem_Write(hi2c, DevAddress, MemAddress, MemAddSize, pData, Size, Timeout);
+//		HAL_Delay(100);
 
-		case home:
-			switch(state_home){
-			case l_gain_dis:
-//				Display_Clear();
-				Display_DrawFilledRectangle(0, 17, 128, 12, 0);
-				Display_DrawFilledRectangle(0, 17, 61, 12, 1);
-				Display_GotoXY(3, 19); Display_Puts("100", &Font_7x10, 0);
-				Display_DrawRectangle(66, 17, 61, 12, 1);
-				Display_GotoXY(69, 19); Display_Puts("90", &Font_7x10, 1);
-				Display_UpdateScreen();
-				state_home = l_gain;
-				break;
-			case l_gain:
-				if(readEncoder()==1){
-					EQ_level_L += 2;
-					if(EQ_level_L >= 1)
-						EQ_level_L = 1;
-					state_home = l_gain_dis;
-				}
-				else if(readEncoder()==2){
-					EQ_level_L -= 2;
-					if(EQ_level_L <= 0)
-						EQ_level_L = 0;
-					state_home = l_gain_dis;
-				}
-				if(switchRight()){
-					state_home = r_gain_dis;
-				}
-				break;
-			case r_gain_dis:
-				Display_DrawFilledRectangle(0, 17, 128, 12, 0);
-				Display_DrawRectangle(0, 17, 61, 12, 1);
-				Display_GotoXY(3, 19); Display_Puts("90", &Font_7x10, 1);
-				Display_DrawFilledRectangle(66, 17, 61, 12, 1);
-				Display_GotoXY(69, 19); Display_Puts("100", &Font_7x10, 0);
-				Display_UpdateScreen();
-				state_home = r_gain;
-				break;
-			case r_gain:
-				if(readEncoder()==1){
-					EQ_level_R += 2;
-					if(EQ_level_R >= 1)
-						EQ_level_R = 1;
-					state_home = r_gain_dis;
-				}
-				else if(readEncoder()==2){
-					EQ_level_R -= 2;
-					if(EQ_level_R <= 0)
-						EQ_level_R = 0;
-					state_home = r_gain_dis;
-				}
-				if(switchLeft()){
-					state_home = l_gain_dis;
-				}
-				break;
-			}
-			break;
+//		HAL_I2C_Master_Transmit(&hi2c3, 0xA0, cobaKirim, 5, 1000);
+////		HAL_Delay(1);
+//		HAL_I2C_Master_Transmit(&hi2c3, 0xA0, selectAddr, 2, 1000);
+//		HAL_I2C_Master_Receive(&hi2c3, 0xA0, cobaTerima, 5, 1000);
+//		HAL_Delay(11);
 
-		case setting:
-			complete = 0;
-			if(switchEncoder()){
-				myState = save;
-				complete = 1;
-				Display_Clear();
-				Display_DrawRectangle(0, 17, 61, 12, 1);
-							Display_GotoXY(3, 19); Display_Puts("-12.0 dB", &Font_7x10, 1);
-							Display_UpdateScreen();
-			}
-
-
-			break;
-		case save:
-			complete = 0;
-			if(switchEncoder()){
-				myState = home;
-				complete = 1;
-				Display_Clear();
-				Display_UpdateScreen();
-			}
-
-		}
 
 		//		HAL_UART_Receive(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx), 100);
 
@@ -500,82 +1306,7 @@ int main(void)
 		//		EQ_fc = atoi(strParamEQ[3]);
 		//		EQ_Q = atof(strParamEQ[4]);
 
-		//		HAL_Delay(1000);
-//				if((readEnc()==1) && !complete){
-//					cntVal ++;
-////					Flash_Write(0x080E0000, cntVal);
-//					complete=1;
-//
-//
-//				}
-//				else if((readEnc()==2) && !complete){
-//					cntVal --;
-//					complete=1;
-//				}
-//				else if(readEnc()==0){
-//					complete=0;
-//				}
-//				else if(readEnc()==3){
-//					cntVal = 0;
-//				}
 
-
-		//	  cntVal = TIM1->CNT;
-		//	  for(int i=0; i<999; i++){
-		//		  Display_GotoXY(13, 0);
-		//		  Display_Angka3u(i, &Font_7x10, 1);
-		//		  Display_GotoXY(13, 9);
-		//		  Display_Angka3u(i, &Font_7x10, 1);
-		//		  Display_GotoXY(13, 18);
-		//		  Display_Angka3u(i, &Font_7x10, 1);
-		//		  Display_UpdateScreen();
-		//	  }
-
-		//	  Display_DrawFilledRectangle(2, 0, 126, 11, 1);
-		//	  Display_GotoXY(38, 2);
-		//	  Display_Puts("Preset 1", &Font_7x10, 0);
-		//
-		//	  Display_DrawRectangle(2, 16, 20, 12, 1);
-		//	  Display_GotoXY(4,18);
-		//	  Display_Puts("G", &Font_7x10, 1);
-		////
-		////	  Display_GotoXY(0, 22);
-		////	  Display_Puts("G 12.20 -5.00", &Font_7x10, 1);
-		////
-		////	  Display_GotoXY(0, 32);
-		////	  Display_Puts("fc 00.00 -00.00k", &Font_7x10, 1);
-		////
-		////	  Display_GotoXY(0, 42);
-		////	  Display_Puts("Q 0.730 0.239", &Font_7x10, 1);
-		//
-		//	  Display_UpdateScreen();
-		//	  Display_DrawRectangle(0, 0, 45,11, 1);
-		//	  Display_GotoXY(2, 2);
-		//	  Display_Float(-99.99, &Font_7x10, 1);
-		//
-
-		//	  for(float i=0.0; i<99.99; i+=0.01){
-		////		  Display_DrawFilledRectangle(0, 14, 45, 11, 1);
-		//		  Display_GotoXY(0, 30);
-		//		  Display_Float(i, &Font_11x18, 1);
-		//		  Display_UpdateScreen();
-		//		  HAL_Delay(100);
-		//	  }
-
-		//	  Display_GotoXY(0, 9);
-		//	  Display_Float(12.53, &Font_7x10, 1);
-		//	  Display_GotoXY(0, 18);
-
-		//	  Display_DrawLine(0,18 , 40, 18, 1);
-		//	  Display_DrawLine(40, 0, 40, 7, 1);
-
-		//	  SSD1306_GotoXY(0, 0);
-		//	  SSD1306_Puts("ANDI", &Font_11x18, 1);
-		//	  SSD1306_GotoXY(13, 30);
-		//	  SSD1306_Puts("MEI", &Font_11x18, 1);
-		//	  SSD1306_UpdateScreen();
-		//	  HAL_I2C_Master_Transmit(&hi2c1, 0x3D<<1, bakso, 2, HAL_MAX_DELAY);
-		//	  HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -665,6 +1396,40 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief I2C3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C3_Init(void)
+{
+
+  /* USER CODE BEGIN I2C3_Init 0 */
+
+  /* USER CODE END I2C3_Init 0 */
+
+  /* USER CODE BEGIN I2C3_Init 1 */
+
+  /* USER CODE END I2C3_Init 1 */
+  hi2c3.Instance = I2C3;
+  hi2c3.Init.ClockSpeed = 400000;
+  hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c3.Init.OwnAddress1 = 0;
+  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c3.Init.OwnAddress2 = 0;
+  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C3_Init 2 */
+
+  /* USER CODE END I2C3_Init 2 */
 
 }
 
@@ -862,6 +1627,34 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
 }
+
+/* ------------------------------------------ EEPROM ------------------------------------------ */
+void saveToEeprom(void){
+	/* Baca preset terakhir */
+	EEPROM_WriteByte(0, 0, (uint8_t*)&EQ_preset);
+//	uint8_t buff_preset[1];
+//	buff_preset[0] = EQ_preset;
+//	EEPROM_Write(0, 0, buff_preset, 1);
+	/* Baca semua preset */
+	uint8_t* addrOfStruct = (uint8_t*)&myPreset;
+	uint16_t sizeOfStruct = sizeof(myPreset);
+	EEPROM_Write(1, 0, addrOfStruct, sizeOfStruct);
+}
+
+void LoadFromEeprom(void){
+	/* Tulis preset terakhir */
+//	uint8_t buff_preset[1];
+	EEPROM_ReadByte(0, 0, (uint8_t*)&EQ_preset);
+//	EEPROM_Read(0, 0, buff_preset, 1);
+//	HAL_I2C_Mem_Read(&h, DevAddress, MemAddress, MemAddSize, pData, Size, Timeout)
+//	EQ_preset =  buff_preset[0];
+	/* Tulis semua prset */
+    uint16_t sizeOfBuff = sizeof(myPreset);
+    uint8_t reciveBuff[sizeOfBuff];
+    EEPROM_Read(1, 0, reciveBuff, sizeOfBuff);
+    memcpy(&myPreset, reciveBuff, sizeof(myPreset));
+}
+
 /* USER CODE END 4 */
 
 /**

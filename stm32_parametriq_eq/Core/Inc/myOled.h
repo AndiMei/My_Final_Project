@@ -12,7 +12,7 @@
 #include "myFonts.h"
 /* I2C address */
 #ifndef SSD1306_I2C_ADDR
-#define SSD1306_I2C_ADDR         0x3D << 1
+#define SSD1306_I2C_ADDR         0x78
 #endif
 
 /* ------- SSD1306 settings ------- */
@@ -56,11 +56,18 @@ char Display_Putc(char ch, FontDef_t* Font, SSD1306_COLOR_t color);
 /* Puts string to internal RAM */
 char Display_Puts(char* str, FontDef_t* Font, SSD1306_COLOR_t color);
 
-/* Puts string to internal RAM */
-void Display_Float(float data, FontDef_t* Font, SSD1306_COLOR_t color);
+///* Puts string to internal RAM */
+//void Display_Float(float data, FontDef_t* Font, SSD1306_COLOR_t color);
+//
+///* Puts number to internal RAM */
+//void Display_Angka3u(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color);
 
-/* Puts number to internal RAM */
-void Display_Angka3u(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color);
+void Display_PutInt(int16_t data, uint8_t digit, _Bool plus, FontDef_t* Font, SSD1306_COLOR_t color);
+void Display_PutUintDigit(uint16_t data, uint8_t digit, FontDef_t* Font, SSD1306_COLOR_t color);
+void Display_PutUint(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color);
+void Display_PutFloatDigit(float data, uint8_t digit, uint8_t precision, FontDef_t* Font, SSD1306_COLOR_t color);
+void Display_PutFloat(float data, uint8_t precision, FontDef_t* Font, SSD1306_COLOR_t color);
+
 
 
 

@@ -43,7 +43,7 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-
+uint8_t errorCok;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/

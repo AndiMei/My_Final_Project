@@ -151,9 +151,10 @@ uint8_t Display_Init(void) {
 	}
 
 	/* A little delay */
-	uint32_t p = 2500;
+	uint32_t p = 3500;
 	while(p>0)
 		p--;
+//	HAL_Delay(100);
 
 	/* Init LCD */
 	SSD1306_WRITECOMMAND(0xAE); //display off
@@ -311,30 +312,108 @@ char Display_Puts(char* str, FontDef_t* Font, SSD1306_COLOR_t color) {
 	return *str;
 }
 
-void Display_Float(float data, FontDef_t* Font, SSD1306_COLOR_t color){
-	int16_t y;
-	y = (int16_t) data;
-	if(data<0){
-		y = -y;
-		data = -data;
-		Display_Putc('-', Font, color);
+//void Display_Float(float data, FontDef_t* Font, SSD1306_COLOR_t color){
+//	int16_t y;
+//	y = (int16_t) data;
+//	if(data<0){
+//		y = -y;
+//		data = -data;
+//		Display_Putc('-', Font, color);
+//	}
+//
+//	Display_Putc(y/10+0x30, Font, color); //puluhan
+//	Display_Putc(y%10+0x30, Font, color); //satuan
+//
+//	/* Presisi */
+//	Display_Putc('.', Font, color);
+//	data -= y;
+////	data += 0.01;
+//	Display_Putc(((uint8_t)(data*100))/10+0x30, Font, color);
+//	Display_Putc(((uint8_t)(data*100))%10+0x30, Font, color);
+//}
+
+//void Display_Angka3u(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color){
+//	Display_Putc(data/100+0x30, Font, color); 		// hundreds
+//	Display_Putc(data%100/10+0x30, Font, color); 	// tens
+//	Display_Putc(data%10+0x30, Font, color); 		// unit
+//}
+//uint8_t sign=1;
+//    if(x<0){ x=-x;  myLCD::Data('-');sign=0;}
+//    myLCD::Angka3u(x%1000);
+//    if(sign)lcd.Data(' ');
+void Display_PutUintDigit(uint16_t data, uint8_t digit, FontDef_t* Font, SSD1306_COLOR_t color){
+	switch(digit){
+	case 1:
+		Display_Putc(data%10+0x30, Font, color); 		// satuan
+		break;
+	case 2:
+		Display_Putc(data%100/10+0x30, Font, color); 	// puluhan
+		Display_Putc(data%10+0x30, Font, color); 		// satuan
+		break;
+	case 3:
+		Display_Putc(data/100+0x30, Font, color); 		// ratusan
+		Display_Putc(data%100/10+0x30, Font, color); 	// puluhan
+		Display_Putc(data%10+0x30, Font, color); 		// satuan
+		break;
 	}
-
-	Display_Putc(y/10+0x30, Font, color); //puluhan
-	Display_Putc(y%10+0x30, Font, color); //satuan
-
-	/* Presisi */
-	Display_Putc('.', Font, color);
-	data -= y;
-//	data += 0.01;
-	Display_Putc(((uint8_t)(data*100))/10+0x30, Font, color);
-	Display_Putc(((uint8_t)(data*100))%10+0x30, Font, color);
 }
 
-void Display_Angka3u(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color){
-	Display_Putc(data/100+0x30, Font, color); 		// hundreds
-	Display_Putc(data%100/10+0x30, Font, color); 	// tens
-	Display_Putc(data%10+0x30, Font, color); 		// unit
+void Display_PutUint(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color){
+	if(data>=100){
+		Display_PutUintDigit(data, 3, Font, color);
+	}
+	else if (data>=10){
+		Display_PutUintDigit(data, 2, Font, color);
+	}
+	else{
+		Display_PutUintDigit(data, 1, Font, color);
+	}
+}
+
+void Display_PutInt(int16_t data, uint8_t digit, _Bool plus, FontDef_t* Font, SSD1306_COLOR_t color){
+	if(data < 0){
+		data = -data; Display_Putc('-', Font, color);
+	}
+	else{
+		if(plus)
+			Display_Putc('+', Font, color);
+	}
+	Display_PutUintDigit(data, digit, Font, color);
+}
+
+void Display_PutFloatDigit(float data, uint8_t digit, uint8_t precision, FontDef_t* Font, SSD1306_COLOR_t color){
+	int32_t y = (int32_t)data;
+	uint16_t precision_factor = pow(10, precision);
+
+	if(data < 0){
+		Display_Putc('-', Font, color);
+		y = -y;
+		data = -data;
+	}
+//	else{ Display_Putc('+', Font, color);}
+	data = data - y;
+	data = data * precision_factor;
+	Display_PutUintDigit((uint16_t)y, digit, Font, color);
+	Display_Putc('.', Font, color);
+	Display_PutUintDigit((uint16_t)data, precision, Font, color);
+
+}
+
+void Display_PutFloat(float data, uint8_t precision, FontDef_t* Font, SSD1306_COLOR_t color){
+	int32_t y = (int32_t)data;
+	uint16_t precision_factor = pow(10, precision);
+
+	if(data < 0){
+		Display_Putc('-', Font, color);
+		y = -y;
+		data = -data;
+	}
+	//	else{ Display_Putc('+', Font, color);}
+	data = data - y;
+	data = data * precision_factor;
+	Display_PutUint((uint16_t)y, Font, color);
+	Display_Putc('.', Font, color);
+	Display_PutUintDigit((uint16_t)data, precision, Font, color);
 }
 
 void Display_DrawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, SSD1306_COLOR_t c) {
