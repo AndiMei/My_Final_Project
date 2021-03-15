@@ -1,0 +1,6 @@
+myEEPROM.c:9:10:bytesToWrite	16	static
+myEEPROM.c:17:6:EEPROM_Write	64	static
+myEEPROM.c:42:6:EEPROM_Read	56	static
+myEEPROM.c:64:6:EEPROM_WriteByte	40	static
+myEEPROM.c:73:6:EEPROM_ReadByte	40	static
+myEEPROM.c:81:6:EEPROM_ErasePage	72	static
