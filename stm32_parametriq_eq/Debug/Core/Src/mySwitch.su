@@ -2,7 +2,7 @@ mySwitch.c:10:9:readEncoder	16	static
 mySwitch.c:29:7:switchEncoder	16	static
 mySwitch.c:44:7:encoderCW	16	static
 mySwitch.c:59:7:encoderCCW	16	static
-mySwitch.c:74:7:switchUp	16	static
 mySwitch.c:89:7:switchDown	16	static
 mySwitch.c:104:7:switchLeft	16	static
 mySwitch.c:119:7:switchRight	16	static
+mySwitch.c:139:9:switchUp	16	static

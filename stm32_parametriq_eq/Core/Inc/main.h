@@ -44,6 +44,7 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 uint8_t errorCok;
+//uint16_t longPress;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/

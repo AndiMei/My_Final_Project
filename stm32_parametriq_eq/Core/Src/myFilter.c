@@ -37,10 +37,10 @@ void shelv(float *pCoeffs, _Bool type, float gain, float fc, float fs){
 		/* All Pass */
 		else{
 			pCoeffs[0] = V;
-			pCoeffs[1] = 0;
-			pCoeffs[2] = 0;
-			pCoeffs[3] = 0;
-			pCoeffs[4] = 0;
+			pCoeffs[1] = 0.0f;
+			pCoeffs[2] = 0.0f;
+			pCoeffs[3] = 0.0f;
+			pCoeffs[4] = 0.0f;
 		}
 	}
 	/* High Shelving Filter */
@@ -66,10 +66,10 @@ void shelv(float *pCoeffs, _Bool type, float gain, float fc, float fs){
 		/* All Pas */
 		else{
 			pCoeffs[0] = V;
-			pCoeffs[1] = 0;
-			pCoeffs[2] = 0;
-			pCoeffs[3] = 0;
-			pCoeffs[4] = 0;
+			pCoeffs[1] = 0.0f;
+			pCoeffs[2] = 0.0f;
+			pCoeffs[3] = 0.0f;
+			pCoeffs[4] = 0.0f;
 		}
 	}
 }

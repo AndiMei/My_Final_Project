@@ -18,11 +18,12 @@ uint16_t clk_debounce;
 
 uint8_t readEncoder(void);
 _Bool switchEncoder(void);
-_Bool switchUp(void);
+uint8_t switchUp(void);
 _Bool switchDown(void);
 _Bool switchLeft(void);
 _Bool switchRight(void);
 _Bool encoderCW(void);
 _Bool encoderCCW(void);
+//uint8_t switchCombineUpEnc(void);
 
 #endif /* INC_MYSWITCH_H_ */

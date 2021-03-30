@@ -7,6 +7,8 @@
 #define AP_SSID           "EQ-JOSS"
 #define AP_PASS           "ANDI1234"
 #define WIFI_PORT         80
+#define LED_BLUE          15
+#define LED_RED           2
 
 /* <-----------| Object Definition|-----------> */
 WiFiServer myServer(WIFI_PORT);          // Object WiFi server
@@ -50,6 +52,9 @@ void setup() {
   Serial.println(myIP);
   myServer.begin();                 // Start WiFi
   Serial.println("WiFi Server Started !");
+
+  pinMode(LED_BLUE, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
 }
 
 void send_data_STM32(char send_data[]) {
@@ -95,6 +100,12 @@ void Bluetooth_Stream() {
   }
 }
 void loop() {
-  WiFi_Stream();
+//  WiFi_Stream();
+  digitalWrite(LED_BLUE, LOW);
+  digitalWrite(LED_RED, HIGH);
+  delay(3000);
+  digitalWrite(LED_BLUE, HIGH);
+  digitalWrite(LED_RED, LOW);
+  delay(3000);
 //    Bluetooth_Stream();
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'bluetooth_page.dart';
 import 'wifi_page.dart';
+import 'coba.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -29,6 +30,14 @@ class _HomePageState extends State<HomePage> {
             onPressed: () {
               Navigator.push(context, MaterialPageRoute(builder: (contex) {
                 return WifiPage();
+              }));
+            },
+          ),
+          RaisedButton(
+            child: Text("Test EQ"),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (contex) {
+                return cobaPage();
               }));
             },
           ),

@@ -44,7 +44,9 @@ float R_xZ41, R_xZ42, R_yZ41, R_yZ42;
 float R_xZ51, R_xZ52, R_yZ51, R_yZ52;
 
 /* Function Prototype */
-uint32_t IIR_Right(uint32_t data);
-uint32_t IIR_Left(uint32_t data);
+//uint32_t IIR_Right(uint32_t data);
+//uint32_t IIR_Left(uint32_t data);
+float IIR_Right(float data);
+float IIR_Left(float data);
 
 #endif /* INC_MYIIR_H_ */

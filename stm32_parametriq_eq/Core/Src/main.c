@@ -56,11 +56,11 @@ float cobafloat;
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
-//I2C_HandleTypeDef hi2c3;
+I2C_HandleTypeDef hi2c3;
 
 I2S_HandleTypeDef hi2s2;
-DMA_HandleTypeDef hdma_spi2_rx;
-DMA_HandleTypeDef hdma_i2s2_ext_tx;
+DMA_HandleTypeDef hdma_spi2_tx;
+DMA_HandleTypeDef hdma_i2s2_ext_rx;
 
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_tx;
@@ -72,7 +72,7 @@ DMA_HandleTypeDef hdma_usart1_rx;
 //enum state1{preset_dis, l_gain_dis, l_gain, r_gain_dis, r_gain, not_select} state_home;
 enum state2{
 	start, display_home, preset, l_level, r_level, save, display_setting,
-	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw
+	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw, set_default
 }state_home;
 //int8_t last_state = 1;
 uint32_t L_Buff = 0;
@@ -81,7 +81,7 @@ uint32_t R_Buff = 0;
 uint16_t rxBuff[BLOCK_SIZE*2];
 uint16_t txBuff[BLOCK_SIZE*2];
 
-uint8_t bakso[3];
+uint8_t bakso;
 
 uint16_t cntVal=0;
 
@@ -202,6 +202,56 @@ void writeWord(float dataf, _Bool ch, uint8_t buffer){
 	}
 }
 
+void Calc_Coeff_Filter(void){
+	/* Hitung koefisien filter Kanan */
+	shelv(&R_cS1[0], 0, myPreset[EQ_preset].gain_R[0], myPreset[EQ_preset].fc_R[0], FREQSAMPLING);
+	peak(&R_cS2[0], myPreset[EQ_preset].gain_R[1], myPreset[EQ_preset].fc_R[1], myPreset[EQ_preset].bw_R[0], FREQSAMPLING);
+	peak(&R_cS3[0], myPreset[EQ_preset].gain_R[2], myPreset[EQ_preset].fc_R[2], myPreset[EQ_preset].bw_R[1], FREQSAMPLING);
+	peak(&R_cS4[0], myPreset[EQ_preset].gain_R[3], myPreset[EQ_preset].fc_R[3], myPreset[EQ_preset].bw_R[2], FREQSAMPLING);
+	shelv(&R_cS5[0], 1, myPreset[EQ_preset].gain_R[4], myPreset[EQ_preset].fc_R[4], FREQSAMPLING);
+
+	/* Hitung koefisien filter kiri */
+	shelv(&L_cS1[0], 0, myPreset[EQ_preset].gain_L[0], myPreset[EQ_preset].fc_L[0], FREQSAMPLING);
+	peak(&L_cS2[0], myPreset[EQ_preset].gain_L[1], myPreset[EQ_preset].fc_L[1], myPreset[EQ_preset].bw_L[0], FREQSAMPLING);
+	peak(&L_cS3[0], myPreset[EQ_preset].gain_L[2], myPreset[EQ_preset].fc_L[2], myPreset[EQ_preset].bw_L[1], FREQSAMPLING);
+	peak(&L_cS4[0], myPreset[EQ_preset].gain_L[3], myPreset[EQ_preset].fc_L[3], myPreset[EQ_preset].bw_L[2], FREQSAMPLING);
+	shelv(&L_cS5[0], 1, myPreset[EQ_preset].gain_L[4], myPreset[EQ_preset].fc_L[4], FREQSAMPLING);
+}
+
+void Default_Setting(void){
+	int8_t i = 0;
+	int8_t j = 0;
+
+	for(i=0; i<MAX_PRESET; i++){
+		myPreset[i].level_R = 100;
+		myPreset[i].level_L = 100;
+
+		for(j=0; j<MAX_BAND; j++){
+			myPreset[i].gain_R[j] = 0;
+			myPreset[i].gain_L[j] = 0;
+
+			if(EQ_band<3){
+				myPreset[i].bw_R[j] = 100;
+				myPreset[i].bw_L[j] = 100;
+			}
+
+		}
+
+		myPreset[i].fc_R[0] = 70;
+		myPreset[i].fc_R[1] = 300;
+		myPreset[i].fc_R[2] = 1000;
+		myPreset[i].fc_R[3] = 3000;
+		myPreset[i].fc_R[4] = 12000;
+
+		myPreset[i].fc_L[0] = 70;
+		myPreset[i].fc_L[1] = 300;
+		myPreset[i].fc_L[2] = 1000;
+		myPreset[i].fc_L[3] = 3000;
+		myPreset[i].fc_L[4] = 12000;
+	}
+	HAL_Delay(10);
+}
+
 
 //float jajal = 8.123f;
 //void Flash_Write(uint32_t flash_addr, uint32_t flash_data){
@@ -267,6 +317,8 @@ void myTask(void){
 		Display_UpdateScreen();
 		/* Baca preset dari EEPROM */
 		LoadFromEeprom();
+		/* Hitung koefisien filter untuk pertama kaili on */
+		Calc_Coeff_Filter();
 		HAL_Delay(1000);
 		state_home = display_home;
 		break;
@@ -299,19 +351,27 @@ void myTask(void){
 
 		/* Update semua layar */
 		Display_UpdateScreen();
+
+		/* Hitung koefisien filter setiap pergantian parameter */
+		Calc_Coeff_Filter();
+
 		state_home = last_state;
 
 		break;
 
 	case preset:
-		if(switchUp()){
+		if(switchUp()==2){
+			state_home = set_default;
+
+		}
+		if(switchUp()==1){
 			preset_selected = 0;
 			l_selected = 0;
 			r_selected = 1;
 			state_home = save;
 			last_state = r_level;
 		}
-		else if(switchDown()){
+		if(switchDown()){
 			preset_selected = 0;
 			l_selected = 1;
 			r_selected = 0;
@@ -336,12 +396,11 @@ void myTask(void){
 			state_home = display_home;
 			last_state = preset;
 		}
-		else if(switchEncoder()==1){
+		else if(switchEncoder()){
 			state_home = display_setting;
 			last_state = band;
 			Display_Clear();
 		}
-
 		break;
 
 	case l_level:
@@ -411,6 +470,21 @@ void myTask(void){
 		Display_Puts("Saved !", &Font_7x10, 1);
 		/* Update semua layar */
 		Display_UpdateScreen();
+		/* Simpan data di EEPROM */
+		saveToEeprom();
+		/* clear baris 3 */
+		Display_DrawFilledRectangle(0, 49, 128, 12, 0);
+		Display_UpdateScreen();
+		state_home = display_home;
+		break;
+
+	case set_default:
+		Display_GotoXY(3, 50);
+		Display_Puts("Set to Default !", &Font_7x10, 1);
+		/* Update semua layar */
+		Display_UpdateScreen();
+		/* panggil fungsi default */
+		Default_Setting();
 		/* Simpan data di EEPROM */
 		saveToEeprom();
 		/* clear baris 3 */
@@ -529,7 +603,10 @@ void myTask(void){
 		Display_PutUint(myPreset[EQ_preset].bw_R[EQ_band], &Font_7x10, !r_bw_selected);
 		Display_Puts("%", &Font_7x10, !r_bw_selected);
 
-//		if(EQ_band<1 || EQ_band>3) Display_DrawFilledRectangle(0, 51, 128, 12, 0);
+		if(EQ_band<1 || EQ_band>3) Display_DrawFilledRectangle(0, 51, 128, 12, 0);
+
+		/* Hitung koefisien filter setiap pergantian parameter */
+		Calc_Coeff_Filter();
 
 		/* update screen */
 		Display_UpdateScreen();
@@ -740,16 +817,29 @@ void myTask(void){
 			last_state = l_gain;
 		}
 		else if(switchDown()){
-			band_selected = 0;
-			l_gain_selected = 0;
-			r_gain_selected = 0;
-			l_fc_selected = 0;
-			r_fc_selected = 0;
-			l_bw_selected = 1;
-			r_bw_selected = 0;
+			if((EQ_band > 0) && (EQ_band <4)){
+				band_selected = 0;
+				l_gain_selected = 0;
+				r_gain_selected = 0;
+				l_fc_selected = 0;
+				r_fc_selected = 0;
+				l_bw_selected = 1;
+				r_bw_selected = 0;
+				state_home = display_setting;
+				last_state = l_bw;
+			}
+			else{
+				band_selected = 1;
+				l_gain_selected = 0;
+				r_gain_selected = 0;
+				l_fc_selected = 0;
+				r_fc_selected = 0;
+				l_bw_selected = 0;
+				r_bw_selected = 0;
+				state_home = display_setting;
+				last_state = band;
+			}
 
-			state_home = display_setting;
-			last_state = l_bw;
 		}
 		else if(switchLeft() || switchRight()){
 			band_selected = 0;
@@ -814,16 +904,28 @@ void myTask(void){
 			last_state = r_gain;
 		}
 		else if(switchDown()){
-			band_selected = 0;
-			l_gain_selected = 0;
-			r_gain_selected = 0;
-			l_fc_selected = 0;
-			r_fc_selected = 0;
-			l_bw_selected = 0;
-			r_bw_selected = 1;
-
-			state_home = display_setting;
-			last_state = r_bw;
+			if((EQ_band > 0) && (EQ_band <4)){
+				band_selected = 0;
+				l_gain_selected = 0;
+				r_gain_selected = 0;
+				l_fc_selected = 0;
+				r_fc_selected = 0;
+				l_bw_selected = 0;
+				r_bw_selected = 1;
+				state_home = display_setting;
+				last_state = r_bw;
+			}
+			else{
+				band_selected = 1;
+				l_gain_selected = 0;
+				r_gain_selected = 0;
+				l_fc_selected = 0;
+				r_fc_selected = 0;
+				l_bw_selected = 0;
+				r_bw_selected = 0;
+				state_home = display_setting;
+				last_state = band;
+			}
 		}
 		else if(switchLeft() || switchRight()){
 			band_selected = 0;
@@ -957,7 +1059,7 @@ void myTask(void){
 uint8_t selectAddr[2] ={0x00, 0x00};
 uint8_t cobaKirim[3] = {25, 5, 15};
 uint8_t cobaTerima[5];
-uint8_t flag = 0;
+//uint8_t flag = 0;
 
 //struct Coba{
 //	uint16_t andi;
@@ -969,23 +1071,23 @@ uint8_t flag = 0;
 
 
 
-struct EQ2{
-
-	int8_t level_R;
-	int8_t level_L;
-
-	float32_t gain_R[MAX_BAND];
-	float gain_L[MAX_BAND];
-
-	uint32_t fc_R[MAX_BAND];
-	uint32_t fc_L[MAX_BAND];
-
-	uint8_t bw_R[MAX_BAND];
-	uint8_t bw_L[MAX_BAND];
-};
-
-
-struct EQ2 myPreset2[MAX_PRESET];
+//struct EQ2{
+//
+//	int8_t level_R;
+//	int8_t level_L;
+//
+//	float32_t gain_R[MAX_BAND];
+//	float gain_L[MAX_BAND];
+//
+//	uint32_t fc_R[MAX_BAND];
+//	uint32_t fc_L[MAX_BAND];
+//
+//	uint8_t bw_R[MAX_BAND];
+//	uint8_t bw_L[MAX_BAND];
+//};
+//
+//
+//struct EQ2 myPreset2[MAX_PRESET];
 
 //void EEPROM_save(uint8_t pData){
 //	uint8_t lengthData = sizeof(pData);
@@ -1009,7 +1111,7 @@ struct EQ2 myPreset2[MAX_PRESET];
 //int8_t meong2;
 //float pipi2;
 
-
+float maxj = 0;
 /* USER CODE END 0 */
 
 /**
@@ -1037,7 +1139,6 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 	__HAL_RCC_DMA1_CLK_ENABLE();
-//	__HAL_RCC_I2C3_CLK_ENABLE();
 
   /* USER CODE END SysInit */
 
@@ -1049,19 +1150,22 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C3_Init();
   /* USER CODE BEGIN 2 */
+	HAL_Delay(20);
 
 	//  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
 
 //	Display_Init();
 	Display_Init();
-		Display_GotoXY(0, 0);
-		Display_Puts("ANDI", &Font_11x18, 1);
-		Display_GotoXY(13, 30);
-//		Display_Angka3u(123, &Font_11x18, 1);
-//		Display_GotoXY(13, 50);
-		Display_Puts("Prasetyo", &Font_7x10, 1);
-		Display_UpdateScreen();
-		HAL_Delay(2000);
+
+
+//		Display_GotoXY(0, 0);
+//		Display_Puts("ANDI", &Font_11x18, 1);
+//		Display_GotoXY(13, 30);
+////		Display_Angka3u(123, &Font_11x18, 1);
+////		Display_GotoXY(13, 50);
+//		Display_Puts("Prasetyo", &Font_7x10, 1);
+//		Display_UpdateScreen();
+//		HAL_Delay(2000);
 //
 //	// 5 huruf 18 huruf
 //	Display_DrawRectangle(0, 0, 61, 12, 1);
@@ -1111,8 +1215,9 @@ int main(void)
 //	peak(&L_cS4[0], 0, 5000, 50, FREQSAMPLING);
 //	shelv(&L_cS5[0], 1, 0, 12000, FREQSAMPLING);
 //
-//	/* DMA I2S dimulai */
-//	HAL_I2SEx_TransmitReceive_DMA(&hi2s2, txBuff, rxBuff, BLOCK_SIZE);
+	/* DMA I2S dimulai */
+	HAL_GPIO_WritePin(I2S_EN_GPIO_Port, I2S_EN_Pin, 1);
+	HAL_I2SEx_TransmitReceive_DMA(&hi2s2, txBuff, rxBuff, BLOCK_SIZE);
 //
   /* USER CODE END 2 */
 
@@ -1240,11 +1345,39 @@ int main(void)
 //  HAL_Delay(50);
 
     /* terima */
-
-	cobafloat = 2374/1000.0f;
+//		myTask();
+	HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
+	HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
+	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
+//	cobafloat = 2374/1000.0f;
 	while (1)
 	{
+//		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 0);
+//		HAL_Delay(1000);
+//		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
+//		HAL_Delay(1000);
+//		bakso = switchCombineUpEnc();
+//		if(bakso==1){
+//			pernahSatu = 1;
+//		}
+//		if(bakso==2){
+//			pernahDua = 2;
+//		}
 		myTask();
+		if(L_Samplef > 2000000){
+			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 0);
+		}
+		else{
+			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
+		}
+
+		if(R_Samplef > 2000000){
+			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 0);
+		}
+		else{
+			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
+		}
+
 //		 EEPROM_Read(0, 0, reciveBuff, sizeOfBuff);
 //
 //		memcpy(&myPreset2, reciveBuff, sizeof(myPreset2));
@@ -1449,7 +1582,7 @@ static void MX_I2S2_Init(void)
 
   /* USER CODE END I2S2_Init 1 */
   hi2s2.Instance = SPI2;
-  hi2s2.Init.Mode = I2S_MODE_MASTER_RX;
+  hi2s2.Init.Mode = I2S_MODE_MASTER_TX;
   hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
   hi2s2.Init.DataFormat = I2S_DATAFORMAT_24B;
   hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
@@ -1507,8 +1640,8 @@ static void MX_DMA_Init(void)
 {
 
   /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
   __HAL_RCC_DMA2_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Stream3_IRQn interrupt configuration */
@@ -1536,6 +1669,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
@@ -1589,35 +1723,29 @@ static void MX_GPIO_Init(void)
 void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s){
 	L_Samplef = readWord(0,0);
 	R_Samplef = readWord(1,0);
-	//
-	////	i=10;
-	////	if(--i < 0){
-	////		i=10;
-	////		if(L_Samplef > max) max = L_Samplef;
-	////		if(L_Samplef < min) min = L_Samplef;
-	////	}
-	//
-	////	if(R_Samplef > max) max = L_Samplef;
-	////	if(R_Samplef < min) min = L_Samplef;
-	//
+
+	L_Samplef = L_Samplef * (myPreset[EQ_preset].level_L * 0.01);
+	R_Samplef = R_Samplef * (myPreset[EQ_preset].level_R * 0.01);
+
+	L_Samplef = IIR_Left(L_Samplef);
+	R_Samplef = IIR_Right(R_Samplef);
+
 	writeWord(L_Samplef, 0, 0);
-	writeWord(L_Samplef, 1, 0);
+	writeWord(R_Samplef, 1, 0);
 }
 
 void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s){
 	L_Samplef = readWord(0,4);
 	R_Samplef = readWord(1,4);
-	//	i=10;
-	//	if(--i < 0){
-	//		i=10;
-	//		if(L_Samplef > max) max = L_Samplef;
-	//		if(L_Samplef < min) min = L_Samplef;
-	//	}
 
-	//	writeWord(L_Samplef, 0, 0);
-	//	writeWord(L_Samplef, 1, 0);
+	L_Samplef = L_Samplef * (myPreset[EQ_preset].level_L * 0.01);
+	R_Samplef = R_Samplef * (myPreset[EQ_preset].level_R * 0.01);
+
+	L_Samplef = IIR_Left(L_Samplef);
+	R_Samplef = IIR_Right(R_Samplef);
+
 	writeWord(L_Samplef, 0, 4);
-	writeWord(L_Samplef, 1, 4);
+	writeWord(R_Samplef, 1, 4);
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
