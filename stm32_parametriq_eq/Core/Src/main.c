@@ -71,7 +71,7 @@ DMA_HandleTypeDef hdma_usart1_rx;
 //enum state0{home_dis, home, setting_dis, setting , save_dis, save} myState;
 //enum state1{preset_dis, l_gain_dis, l_gain, r_gain_dis, r_gain, not_select} state_home;
 enum state2{
-	start, display_home, preset, l_level, r_level, save, display_setting,
+	start, display_home, preset, l_level, r_level, save, save2, display_setting,
 	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw, set_default
 }state_home;
 //int8_t last_state = 1;
@@ -252,6 +252,7 @@ void Default_Setting(void){
 	HAL_Delay(10);
 }
 
+char *apaIni;
 
 //float jajal = 8.123f;
 //void Flash_Write(uint32_t flash_addr, uint32_t flash_data){
@@ -322,6 +323,7 @@ void myTask(void){
 		HAL_Delay(1000);
 		state_home = display_home;
 		break;
+
 	case display_home:
 		/* clear baris 1 */
 		Display_DrawFilledRectangle(0, 0, 128, 12, 0);
@@ -364,21 +366,21 @@ void myTask(void){
 			state_home = set_default;
 
 		}
-		if(switchUp()==1){
+		if(switchRight()){
 			preset_selected = 0;
 			l_selected = 0;
 			r_selected = 1;
 			state_home = save;
 			last_state = r_level;
 		}
-		if(switchDown()){
+		if(switchLeft()){
 			preset_selected = 0;
 			l_selected = 1;
 			r_selected = 0;
 			state_home = save;
 			last_state = l_level;
 		}
-		else if(switchRight()){
+		if(encoderCW()){
 			EQ_preset++;
 			if(EQ_preset>9) EQ_preset=0;
 			preset_selected = 1;
@@ -387,7 +389,7 @@ void myTask(void){
 			state_home = display_home;
 			last_state = preset;
 		}
-		else if(switchLeft()){
+		if(encoderCCW()){
 			EQ_preset--;
 			if(EQ_preset<0) EQ_preset=9;
 			preset_selected = 1;
@@ -405,25 +407,25 @@ void myTask(void){
 
 	case l_level:
 		if(encoderCW()){
-			myPreset[EQ_preset].level_L += 1;
-			if(myPreset[EQ_preset].level_L >= 100) myPreset[EQ_preset].level_L=100;
+			myPreset[EQ_preset].level_L += 2;
+			if(myPreset[EQ_preset].level_L >= 100) myPreset[EQ_preset].level_L=0;
 			state_home = display_home;
 			last_state = l_level;
 		}
 		if(encoderCCW()){
-			myPreset[EQ_preset].level_L -= 1;
-			if(myPreset[EQ_preset].level_L < 0) myPreset[EQ_preset].level_L=0;
+			myPreset[EQ_preset].level_L -= 2;
+			if(myPreset[EQ_preset].level_L < 0) myPreset[EQ_preset].level_L=100;
 			state_home = display_home;
 			last_state = l_level;
 		}
-		if(switchUp()){
+		if(switchLeft()){
 			preset_selected = 1;
 			l_selected = 0;
 			r_selected = 0;
 			state_home = save;
 			last_state = preset;
 		}
-		else if(switchDown()){
+		else if(switchRight()){
 			preset_selected = 0;
 			l_selected = 0;
 			r_selected = 1;
@@ -434,25 +436,25 @@ void myTask(void){
 
 	case r_level:
 		if(encoderCW()){
-			myPreset[EQ_preset].level_R += 1;
-			if(myPreset[EQ_preset].level_R >= 100) myPreset[EQ_preset].level_R=100;
+			myPreset[EQ_preset].level_R += 2;
+			if(myPreset[EQ_preset].level_R >= 100) myPreset[EQ_preset].level_R=0;
 			state_home = display_home;
 			last_state = r_level;
 		}
 		if(encoderCCW()){
-			myPreset[EQ_preset].level_R -= 1;
-			if(myPreset[EQ_preset].level_R < 0) myPreset[EQ_preset].level_R=0;
+			myPreset[EQ_preset].level_R -= 2;
+			if(myPreset[EQ_preset].level_R < 0) myPreset[EQ_preset].level_R=100;
 			state_home = display_home;
 			last_state = r_level;
 		}
-		if(switchUp()){
+		if(switchLeft()){
 			preset_selected = 0;
 			l_selected = 1;
 			r_selected = 0;
 			state_home = save;
 			last_state = l_level;
 		}
-		else if(switchDown()){
+		else if(switchRight()){
 			preset_selected = 1;
 			l_selected = 0;
 			r_selected = 0;
@@ -476,6 +478,15 @@ void myTask(void){
 		Display_DrawFilledRectangle(0, 49, 128, 12, 0);
 		Display_UpdateScreen();
 		state_home = display_home;
+		break;
+
+	case save2:
+		/* Simpan data di EEPROM */
+		saveToEeprom();
+		/* clear baris 3 */
+		Display_DrawFilledRectangle(0, 49, 128, 12, 0);
+		Display_UpdateScreen();
+		state_home = display_setting;
 		break;
 
 	case set_default:
@@ -640,7 +651,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_gain;
 		}
 		else if(switchRight()){
@@ -652,7 +663,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_gain;
 		}
 		break;
@@ -684,7 +695,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = band;
 		}
 		else if(switchDown()){
@@ -696,7 +707,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_fc;
 		}
 		else if(switchLeft() || switchRight()){
@@ -708,7 +719,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_gain;
 		}
 		break;
@@ -739,7 +750,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = band;
 		}
 		else if(switchDown()){
@@ -751,7 +762,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_fc;
 		}
 		else if(switchLeft() || switchRight()){
@@ -763,7 +774,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_gain;
 		}
 		break;
@@ -813,7 +824,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_gain;
 		}
 		else if(switchDown()){
@@ -825,7 +836,7 @@ void myTask(void){
 				r_fc_selected = 0;
 				l_bw_selected = 1;
 				r_bw_selected = 0;
-				state_home = display_setting;
+				state_home = save2;
 				last_state = l_bw;
 			}
 			else{
@@ -836,7 +847,7 @@ void myTask(void){
 				r_fc_selected = 0;
 				l_bw_selected = 0;
 				r_bw_selected = 0;
-				state_home = display_setting;
+				state_home = save2;
 				last_state = band;
 			}
 
@@ -850,7 +861,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_fc;
 		}
 		break;
@@ -900,7 +911,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_gain;
 		}
 		else if(switchDown()){
@@ -912,7 +923,7 @@ void myTask(void){
 				r_fc_selected = 0;
 				l_bw_selected = 0;
 				r_bw_selected = 1;
-				state_home = display_setting;
+				state_home = save2;
 				last_state = r_bw;
 			}
 			else{
@@ -923,7 +934,7 @@ void myTask(void){
 				r_fc_selected = 0;
 				l_bw_selected = 0;
 				r_bw_selected = 0;
-				state_home = display_setting;
+				state_home = save2;
 				last_state = band;
 			}
 		}
@@ -936,7 +947,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_fc;
 		}
 		break;
@@ -967,7 +978,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_fc;
 		}
 		else if(switchDown()){
@@ -979,7 +990,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = band;
 		}
 		else if(switchLeft() || switchRight()){
@@ -991,7 +1002,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 1;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_bw;
 		}
 		break;
@@ -1022,7 +1033,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = r_fc;
 		}
 		else if(switchDown()){
@@ -1034,7 +1045,7 @@ void myTask(void){
 			l_bw_selected = 0;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = band;
 		}
 		else if(switchLeft() || switchRight()){
@@ -1046,7 +1057,7 @@ void myTask(void){
 			l_bw_selected = 1;
 			r_bw_selected = 0;
 
-			state_home = display_setting;
+			state_home = save2;
 			last_state = l_bw;
 		}
 		break;
@@ -1345,13 +1356,26 @@ int main(void)
 //  HAL_Delay(50);
 
     /* terima */
-//		myTask();
+		myTask();
 	HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
 	HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
 	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
 //	cobafloat = 2374/1000.0f;
 	while (1)
 	{
+		myTask();
+//		if(switchUp()){
+//			apaIni = "ATAS";
+//		}
+//		if(switchDown()){
+//			apaIni = "BAWAH";
+//		}
+//		if(switchLeft()){
+//			apaIni = "KIRI";
+//		}
+//		if(switchRight()){
+//			apaIni = "KANAN";
+//		}
 //		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 0);
 //		HAL_Delay(1000);
 //		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
@@ -1363,20 +1387,20 @@ int main(void)
 //		if(bakso==2){
 //			pernahDua = 2;
 //		}
-		myTask();
-		if(L_Samplef > 2000000){
-			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 0);
-		}
-		else{
-			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
-		}
-
-		if(R_Samplef > 2000000){
-			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 0);
-		}
-		else{
-			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
-		}
+//		myTask();
+//		if(L_Samplef > 2000000){
+//			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 0);
+//		}
+//		else{
+//			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
+//		}
+//
+//		if(R_Samplef > 2000000){
+//			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 0);
+//		}
+//		else{
+//			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
+//		}
 
 //		 EEPROM_Read(0, 0, reciveBuff, sizeOfBuff);
 //
@@ -1463,12 +1487,11 @@ void SystemClock_Config(void)
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
@@ -1708,7 +1731,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : SW_UP_Pin SW_DOWN_Pin SW_LEFT_Pin SW_RIGHT_Pin */
   GPIO_InitStruct.Pin = SW_UP_Pin|SW_DOWN_Pin|SW_LEFT_Pin|SW_RIGHT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ENC_SW_Pin ENC_CLK_Pin ENC_DT_Pin */

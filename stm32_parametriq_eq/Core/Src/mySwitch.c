@@ -145,10 +145,9 @@ uint8_t switchUp(void){
 		detect = 0;
 		if(!longPress){
 			press++;
-			if(press > 1000000){
+			if(press > 100000){
 				longPress = 1;
 				detect = 2;
-				flag = 1;
 			}
 		}
 
@@ -158,6 +157,7 @@ uint8_t switchUp(void){
 		if(debounce==0xFF){
 			longPress = 0;
 		}
+		detect = 0;
 		press = 0;
 	}
 
