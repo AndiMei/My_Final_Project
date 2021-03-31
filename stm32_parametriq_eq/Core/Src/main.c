@@ -62,28 +62,25 @@ I2S_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_tx;
 DMA_HandleTypeDef hdma_i2s2_ext_rx;
 
+TIM_HandleTypeDef htim2;
+
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 
-//enum state0{home_dis, home, setting_dis, setting , save_dis, save} myState;
-//enum state1{preset_dis, l_gain_dis, l_gain, r_gain_dis, r_gain, not_select} state_home;
+/* Declares state */
 enum state2{
 	start, display_home, preset, l_level, r_level, save, save2, display_setting,
 	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw, set_default
 }state_home;
-//int8_t last_state = 1;
+
 uint32_t L_Buff = 0;
 uint32_t R_Buff = 0;
 
-uint16_t rxBuff[BLOCK_SIZE*2];
-uint16_t txBuff[BLOCK_SIZE*2];
-
-uint8_t bakso;
-
-uint16_t cntVal=0;
+uint16_t I2S_rxBuff[BLOCK_SIZE*2];
+uint16_t I2S_txBuff[BLOCK_SIZE*2];
 
 float L_Samplef;
 float R_Samplef;
@@ -116,15 +113,7 @@ char *array[16];
 #define MAX_BAND	5
 
 int8_t EQ_preset;
-
-//int8_t EQ_level_R[MAX_PRESET];
-//int8_t EQ_level_L[MAX_PRESET];
-
 int8_t EQ_band;
-
-//float EQ_gain[MAX_PRESET][MAX_BAND];
-//int32_t EQ_fc[MAX_PRESET][MAX_BAND];
-//int16_t EQ_Q[MAX_PRESET][MAX_BAND];
 
 struct EQ{
 
@@ -151,21 +140,464 @@ static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_I2C3_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 void saveToEeprom(void);
 void LoadFromEeprom(void);
-//result_float = 0.0f;
+float I2S_readWord(_Bool ch, uint8_t buffer);
+void I2S_writeWord(float dataf, _Bool ch, uint8_t buffer);
+void Calc_Coeff_Filter(void);
+void Default_Setting(void);
+void myTask(void);
 
-float readWord(_Bool ch, uint8_t buffer){
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+	__HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_I2S2_Init();
+  MX_DMA_Init();
+  MX_I2C1_Init();
+  MX_USART1_UART_Init();
+  MX_I2C3_Init();
+  MX_TIM2_Init();
+  /* USER CODE BEGIN 2 */
+  HAL_Delay(20);
+  Display_Init();
+
+  HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
+  HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
+  HAL_GPIO_WritePin(I2S_EN_GPIO_Port, I2S_EN_Pin, 1);
+  /* DMA I2S dimulai */
+  HAL_I2SEx_TransmitReceive_DMA(&hi2s2, I2S_txBuff, I2S_rxBuff, BLOCK_SIZE);
+  /* TIM2 dimulai */
+  HAL_TIM_Base_Start_IT(&htim2);
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+	  myTask();
+	  L_input = 100000;
+	  R_input = R_Samplef;
+
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage 
+  */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  /** Initializes the CPU, AHB and APB busses clocks 
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 168;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB busses clocks 
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S;
+  PeriphClkInitStruct.PLLI2S.PLLI2SN = 50;
+  PeriphClkInitStruct.PLLI2S.PLLI2SR = 2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief I2C3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C3_Init(void)
+{
+
+  /* USER CODE BEGIN I2C3_Init 0 */
+
+  /* USER CODE END I2C3_Init 0 */
+
+  /* USER CODE BEGIN I2C3_Init 1 */
+
+  /* USER CODE END I2C3_Init 1 */
+  hi2c3.Instance = I2C3;
+  hi2c3.Init.ClockSpeed = 400000;
+  hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c3.Init.OwnAddress1 = 0;
+  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c3.Init.OwnAddress2 = 0;
+  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C3_Init 2 */
+
+  /* USER CODE END I2C3_Init 2 */
+
+}
+
+/**
+  * @brief I2S2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2S2_Init(void)
+{
+
+  /* USER CODE BEGIN I2S2_Init 0 */
+
+  /* USER CODE END I2S2_Init 0 */
+
+  /* USER CODE BEGIN I2S2_Init 1 */
+
+  /* USER CODE END I2S2_Init 1 */
+  hi2s2.Instance = SPI2;
+  hi2s2.Init.Mode = I2S_MODE_MASTER_TX;
+  hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
+  hi2s2.Init.DataFormat = I2S_DATAFORMAT_24B;
+  hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
+  hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_48K;
+  hi2s2.Init.CPOL = I2S_CPOL_LOW;
+  hi2s2.Init.ClockSource = I2S_CLOCK_PLL;
+  hi2s2.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_ENABLE;
+  if (HAL_I2S_Init(&hi2s2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2S2_Init 2 */
+
+  /* USER CODE END I2S2_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 19;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 0;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
+  /* DMA1_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA2_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
+  /* DMA2_Stream7_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(I2S_EN_GPIO_Port, I2S_EN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, LED_Pin|TP_D_Pin|TP_C_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOD, TP_B_Pin|TP_A_Pin|R_SIGN_Pin|L_SIGN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : I2S_EN_Pin */
+  GPIO_InitStruct.Pin = I2S_EN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(I2S_EN_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_Pin TP_D_Pin TP_C_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|TP_D_Pin|TP_C_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : TP_B_Pin TP_A_Pin R_SIGN_Pin L_SIGN_Pin */
+  GPIO_InitStruct.Pin = TP_B_Pin|TP_A_Pin|R_SIGN_Pin|L_SIGN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SW_UP_Pin SW_DOWN_Pin SW_LEFT_Pin SW_RIGHT_Pin */
+  GPIO_InitStruct.Pin = SW_UP_Pin|SW_DOWN_Pin|SW_LEFT_Pin|SW_RIGHT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : ENC_SW_Pin ENC_CLK_Pin ENC_DT_Pin */
+  GPIO_InitStruct.Pin = ENC_SW_Pin|ENC_CLK_Pin|ENC_DT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+}
+
+/* USER CODE BEGIN 4 */
+/* ------------------------------------- DSP PROCESS ------------------------------------------ */
+void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s){
+	L_Samplef = I2S_readWord(0,0);
+	R_Samplef = I2S_readWord(1,0);
+
+	L_Samplef = L_Samplef * (myPreset[EQ_preset].level_L * 0.01);
+	R_Samplef = R_Samplef * (myPreset[EQ_preset].level_R * 0.01);
+
+	L_Samplef = IIR_Left(L_Samplef);
+	R_Samplef = IIR_Right(R_Samplef);
+
+	I2S_writeWord(L_Samplef, 0, 0);
+	I2S_writeWord(R_Samplef, 1, 0);
+}
+void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s){
+	L_Samplef = I2S_readWord(0,4);
+	R_Samplef = I2S_readWord(1,4);
+
+	L_Samplef = L_Samplef * (myPreset[EQ_preset].level_L * 0.01);
+	R_Samplef = R_Samplef * (myPreset[EQ_preset].level_R * 0.01);
+
+	L_Samplef = IIR_Left(L_Samplef);
+	R_Samplef = IIR_Right(R_Samplef);
+
+	I2S_writeWord(L_Samplef, 0, 4);
+	I2S_writeWord(R_Samplef, 1, 4);
+}
+
+/* ------------------------------------------ EEPROM ------------------------------------------ */
+void saveToEeprom(void){
+	/* Baca preset terakhir */
+	EEPROM_WriteByte(0, 0, (uint8_t*)&EQ_preset);
+	/* Baca semua preset */
+	uint8_t* addrOfStruct = (uint8_t*)&myPreset;
+	uint16_t sizeOfStruct = sizeof(myPreset);
+	EEPROM_Write(1, 0, addrOfStruct, sizeOfStruct);
+}
+void LoadFromEeprom(void){
+	/* Tulis preset terakhir */
+	EEPROM_ReadByte(0, 0, (uint8_t*)&EQ_preset);
+	/* Tulis semua prset */
+    uint16_t sizeOfBuff = sizeof(myPreset);
+    uint8_t reciveBuff[sizeOfBuff];
+    EEPROM_Read(1, 0, reciveBuff, sizeOfBuff);
+    memcpy(&myPreset, reciveBuff, sizeof(myPreset));
+}
+
+/* -------------------------------------- I2S [AK4556] ---------------------------------------- */
+float I2S_readWord(_Bool ch, uint8_t buffer){
 	int32_t result_int32 = 0;
 	uint32_t result_uint32 = 0;
 	if(!ch){
 		/* read L ch */
-		result_uint32 = (rxBuff[0+buffer]<<8) | (rxBuff[1+buffer]>>8);
+		result_uint32 = (I2S_rxBuff[0+buffer]<<8) | (I2S_rxBuff[1+buffer]>>8);
 	}
 	else{
 		/* write L ch */
-		result_uint32 = (rxBuff[2+buffer]<<8) | (rxBuff[3+buffer]>>8);
+		result_uint32 = (I2S_rxBuff[2+buffer]<<8) | (I2S_rxBuff[3+buffer]>>8);
 	}
 
 	/* ubah 24bit 2's comp ke int 32 bit */
@@ -177,9 +609,7 @@ float readWord(_Bool ch, uint8_t buffer){
 	}
 	return (float)result_int32;
 }
-
-
-void writeWord(float dataf, _Bool ch, uint8_t buffer){
+void I2S_writeWord(float dataf, _Bool ch, uint8_t buffer){
 	uint32_t result_uint32 = 0;
 	/* ubah int 32bit ke 24bit 2's comp */
 	if(dataf < 0){
@@ -191,17 +621,18 @@ void writeWord(float dataf, _Bool ch, uint8_t buffer){
 
 	if(!ch){
 		/* write L ch */
-		txBuff[0+buffer] = (result_uint32>>8) & 0x0000FFFF;
-		txBuff[1+buffer] = (result_uint32<<8) & 0x0000FF00;
+		I2S_txBuff[0+buffer] = (result_uint32>>8) & 0x0000FFFF;
+		I2S_txBuff[1+buffer] = (result_uint32<<8) & 0x0000FF00;
 
 	}
 	else{
 		/* write L ch */
-		txBuff[2+buffer] = (result_uint32>>8) & 0x0000FFFF;
-		txBuff[3+buffer] = (result_uint32<<8) & 0x0000FF00;
+		I2S_txBuff[2+buffer] = (result_uint32>>8) & 0x0000FFFF;
+		I2S_txBuff[3+buffer] = (result_uint32<<8) & 0x0000FF00;
 	}
 }
 
+/* --------------------------------------- EQ PRESET ------------------------------------------ */
 void Calc_Coeff_Filter(void){
 	/* Hitung koefisien filter Kanan */
 	shelv(&R_cS1[0], 0, myPreset[EQ_preset].gain_R[0], myPreset[EQ_preset].fc_R[0], FREQSAMPLING);
@@ -217,7 +648,6 @@ void Calc_Coeff_Filter(void){
 	peak(&L_cS4[0], myPreset[EQ_preset].gain_L[3], myPreset[EQ_preset].fc_L[3], myPreset[EQ_preset].bw_L[2], FREQSAMPLING);
 	shelv(&L_cS5[0], 1, myPreset[EQ_preset].gain_L[4], myPreset[EQ_preset].fc_L[4], FREQSAMPLING);
 }
-
 void Default_Setting(void){
 	int8_t i = 0;
 	int8_t j = 0;
@@ -249,50 +679,16 @@ void Default_Setting(void){
 		myPreset[i].fc_L[3] = 3000;
 		myPreset[i].fc_L[4] = 12000;
 	}
-	HAL_Delay(10);
 }
 
-char *apaIni;
 
-//float jajal = 8.123f;
-//void Flash_Write(uint32_t flash_addr, uint32_t flash_data){
-//
-//	HAL_FLASH_Unlock();
-//	FLASH_Erase_Sector(FLASH_SECTOR_11, VOLTAGE_RANGE_3);
-//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E0000, 0x11111111);
-//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E0004, *(uint32_t *)&jajal);
-//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E0008, 0xFFFFFFFF);
-//	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 0x080E000C, 0xFFFFFFFF);
-//	HAL_FLASH_Lock();
-//}
-//
-//uint32_t Flash_Read(uint32_t flash_addr){
-//	uint32_t flash_data;
-//	flash_data = *(uint32_t*) flash_addr;
-//	return flash_data;
-//}
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+	//	for(int i=0; i<strlen(data_serial_rx); i++){
+	//		data_serial_rx[i] = 0;
+	//	}
 
-//case preset_dis:
-//				/* update tampilan preset */
-//				Display_DrawRectangle(0, 0, 128, 12, 1);
-//				Display_GotoXY(32, 2);
-//				Display_Puts("PRESET ", &Font_7x10, 1);
-//				Display_PutUint(EQ_preset, 1,&Font_7x10 , 1);
-//				Display_UpdateScreen();
-//				state_home = last_state;
-//				break;
-//
-//			case not_select:
-//				Display_DrawFilledRectangle(0, 17, 128, 21, 0);
-//				Display_DrawRectangle(0, 17, 61, 21, 1);
-//				Display_GotoXY(7, 19);
-//				Display_PutUint(EQ_level_L[EQ_preset], 3, &Font_11x18, 1);
-//				Display_Putc('%', &Font_11x18, 1);
-//				Display_DrawFilledRectangle(66, 17, 61, 21, 1);
-//				Display_GotoXY(73, 19);
-//				Display_PutUint(EQ_level_R[EQ_preset], 3, &Font_11x18, 0);
-//				Display_Putc('%', &Font_11x18, 0);
-//				Display_UpdateScreen();
+	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
+}
 
 void myTask(void){
 	/* parameter home_page */
@@ -1063,749 +1459,6 @@ void myTask(void){
 		break;
 	}
 }
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-uint8_t selectAddr[2] ={0x00, 0x00};
-uint8_t cobaKirim[3] = {25, 5, 15};
-uint8_t cobaTerima[5];
-//uint8_t flag = 0;
-
-//struct Coba{
-//	uint16_t andi;
-//	int8_t meong;
-////	uint8_t mei[3];
-////	int8_t pras;
-//	float pipi;
-//};
-
-
-
-//struct EQ2{
-//
-//	int8_t level_R;
-//	int8_t level_L;
-//
-//	float32_t gain_R[MAX_BAND];
-//	float gain_L[MAX_BAND];
-//
-//	uint32_t fc_R[MAX_BAND];
-//	uint32_t fc_L[MAX_BAND];
-//
-//	uint8_t bw_R[MAX_BAND];
-//	uint8_t bw_L[MAX_BAND];
-//};
-//
-//
-//struct EQ2 myPreset2[MAX_PRESET];
-
-//void EEPROM_save(uint8_t pData){
-//	uint8_t lengthData = sizeof(pData);
-//	static uint8_t buff[lengthData];
-//
-//	if(lengthData<32){
-//		f
-//	}
-//}
-
-//uint16_t bytesToWrite(uint16_t size, uint16_t offset){
-//	if((size+offset)<32){
-//		return size;
-//	} else{
-//		return 32 - offset;
-//	}
-//}
-
-//int ukuran;
-//uint16_t andi2;
-//int8_t meong2;
-//float pipi2;
-
-float maxj = 0;
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-  
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-	__HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_I2S2_Init();
-  MX_DMA_Init();
-  MX_I2C1_Init();
-  MX_USART1_UART_Init();
-  MX_I2C3_Init();
-  /* USER CODE BEGIN 2 */
-	HAL_Delay(20);
-
-	//  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
-
-//	Display_Init();
-	Display_Init();
-
-
-//		Display_GotoXY(0, 0);
-//		Display_Puts("ANDI", &Font_11x18, 1);
-//		Display_GotoXY(13, 30);
-////		Display_Angka3u(123, &Font_11x18, 1);
-////		Display_GotoXY(13, 50);
-//		Display_Puts("Prasetyo", &Font_7x10, 1);
-//		Display_UpdateScreen();
-//		HAL_Delay(2000);
-//
-//	// 5 huruf 18 huruf
-//	Display_DrawRectangle(0, 0, 61, 12, 1);
-//	Display_GotoXY(3, 2); Display_Puts("PRESET 9", &Font_7x10, 1);
-//	Display_DrawRectangle(66, 0, 61, 12, 1);
-//	Display_GotoXY(69, 2); Display_Puts("BAND 5", &Font_7x10, 1);
-//
-//	//	Display_DrawRectangle(0, 17, 61, 12, 1);
-//	Display_DrawFilledRectangle(0, 17, 61, 12, 1);
-//	Display_GotoXY(3, 19); Display_Puts("-12.0 dB", &Font_7x10, 0);
-//	Display_DrawRectangle(66, 17, 61, 12, 1);
-//	Display_GotoXY(69, 19); Display_Puts("+12.0 dB", &Font_7x10, 1);
-//	//	Display_GotoXY(5, 16); Display_Puts("BAND 3", &Font_7x10, 1);
-//
-//	Display_DrawRectangle(0, 34, 61, 12, 1);
-//	Display_GotoXY(3, 36); Display_Puts("20 Hz", &Font_7x10, 1);
-//	Display_DrawRectangle(66, 34, 61, 12, 1);
-//	Display_GotoXY(69, 36); Display_Puts("20 kHz", &Font_7x10, 1);
-//
-//	Display_DrawRectangle(0, 51, 61, 12, 1);
-//	Display_GotoXY(3, 53); Display_Puts("0.02", &Font_7x10, 1);
-//	Display_DrawRectangle(66, 51, 61, 12, 1);
-//	Display_GotoXY(69, 53); Display_Puts("1.00", &Font_7x10, 1);
-//
-//	//	Display_GotoXY(0, 11); Display_Puts("234567890234567892345", &Font_7x10, 1);
-//	//	Display_GotoXY(0, 22); Display_Puts("234567890234567892345", &Font_7x10, 1);
-//	//	Display_GotoXY(0, 33); Display_Puts("234567890234567892345", &Font_7x10, 1);
-//	//	Display_GotoXY(0, 44); Display_Puts("234567890234567892345", &Font_7x10, 1);
-//	//	Display_GotoXY(0, 55); Display_Puts("234567890234567892345", &Font_7x10, 1);
-//
-//	Display_UpdateScreen();
-//
-//	HAL_Delay(2000);
-//	Display_Clear();
-//
-//	/* Hitung koefisien filter Kanan */
-//	shelv(&R_cS1[0], 0, 0, 100, FREQSAMPLING);
-//	peak(&R_cS2[0], 0, 300, 50, FREQSAMPLING);
-//	peak(&R_cS3[0], 0, 1000, 50, FREQSAMPLING);
-//	peak(&R_cS4[0], 0, 5000, 50, FREQSAMPLING);
-//	shelv(&R_cS5[0], 1, 0, 12000, FREQSAMPLING);
-//
-//	/* Hitung koefisien filter kiri */
-//	shelv(&L_cS1[0], 0, 0, 100, FREQSAMPLING);
-//	peak(&L_cS2[0], 0, 300, 50, FREQSAMPLING);
-//	peak(&L_cS3[0], 0, 1000, 50, FREQSAMPLING);
-//	peak(&L_cS4[0], 0, 5000, 50, FREQSAMPLING);
-//	shelv(&L_cS5[0], 1, 0, 12000, FREQSAMPLING);
-//
-	/* DMA I2S dimulai */
-	HAL_GPIO_WritePin(I2S_EN_GPIO_Port, I2S_EN_Pin, 1);
-	HAL_I2SEx_TransmitReceive_DMA(&hi2s2, txBuff, rxBuff, BLOCK_SIZE);
-//
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-//	bakso[0] = 0xAA;
-//	bakso[1] = 0x11;
-//	bakso[2] = 0x01;
-//
-////		_Bool complete=0;
-//	//  SSD1306_Clear();
-//	//	HAL_UART_Transmit_DMA(&huart1, (uint8_t*)data_serial, strlen(data_serial));
-//	//	HAL_UART_Receive_DMA(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx));
-//	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
-//
-//	EQ_preset = atoi(strParamEQ[0]);
-	//	EQ_fc = 20;
-	//	if(EQ_fc<0){
-	//		EQ_fc=-EQ_fc;
-	//		gain[0] = '-';
-	//	}
-	//	else{
-	//		gain[0] = '+';
-	//	}
-	//	gain[1] = EQ_fc/10000 + 0x30; 			/* puluhan ribu */
-	//	gain[2] = (EQ_fc%10000)/1000 + 0x30; 	/* ribuan */
-	//	gain[3] = (EQ_fc%1000)/100 + 0x30;		/* ratusan */
-	//	gain[4] = (EQ_fc%100)/10 + 0x30;		/* puluhan */
-	//	gain[5] = (EQ_fc%10) + 0x30;			/* satuan */
-	//	gain[6] = '\0';
-	//
-	//
-	//
-	//	angka_f = atoff(angkaF);
-
-	//			  myLCD::Data(x/100+0x30);           // menulis ratusan
-	//			    myLCD::Data((x%100)/10+0x30);      // menulis puluhan
-	//			    myLCD::Data(x%10+0x30);
-	//	Flash_Write(0x080E0000, 0xABCD1234);
-//	Flash_Write(0x080E0000, 0x11111111);
-//	Flash_Write(0x080E000C, 0x22222222);
-//	cntVal = Flash_Read(0x080E0000);
-
-
-//  	  myName[0].andi = 10;
-//  	  myName[1].mei[0] = 13;
-//  	  myName[2].mei[1] = 14;
-//  	  myName[3].mei[2] = 15;
-//  	  myName[4].pras  =11;
-//  	  myName[5].pipi = 18.23;
-//  	  myName jeneng;
-
-//  	jeneng.andi = 65535;
-//  	jeneng.meong = -9;
-//  	jeneng.pipi = 10.23;
-//  int size = sizeof(myName);
-//  unsigned char* pData;
-//  unsigned char eeprom[size];
-//  unsigned char pDataRecv[size];
-//  myName* read_back;
-//  pData = (unsigned char*)&jeneng;
-//  memcpy(eeprom, pData, size);
-//  uint8_t* addrOfStruct = (uint8_t*)(&jeneng);
-//  uint16_t sizeOfStruct = sizeof(myName);
-//  HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, addrOfStruct, sizeOfStruct, 100);
-////  uint16_t _andi ((myName*)eeprom)->andi;
-//  memcpy(pDataRecv, eeprom, size);
-//  read_back = (myName*)(pDataRecv);
-//  uint16_t andi2 = read_back->andi;
-//  int8_t meong2 = read_back->meong;
-//  float pipi2 = read_back->pipi;
-
-//  struct Coba jenengku[10];
-//  uint8_t* addrOfStruct = (uint8_t*)&jenengku;
-
-
-//  uint16_t sizeOfBuf = sizeof(myName);
-//  uint8_t receiveBuf[sizeOfBuf];
-//  myName* baca;
-
-//  myPreset[0].level_R = 25;
-//  myPreset[0].level_L = 15;
-//  myPreset[1].level_R = 12;
-//  myPreset[1].level_L = 4;
-
-//  myPreset
-//  EQ* baca;
-//
-//  /* kirim */
-
-//
-
-
-//
-//  uint8_t kirim32bit[32] = {
-//		  0,1,2,3,4,5,6,7,8,9,10,11,12,13,
-//		  14,15,16,17,18,19,20,21,22,23,24,25,
-//		  26,27,28,29,30,31
-//  };
-//
-//  uint8_t kirim32bit2[32] = {
-//  		  32,33,34,35,36,37,38,39,
-//		  40,41,42,43,44,45,46,47,48,49,
-//		  50,51,52,53,54,55,56,57,58,59,
-//		  60,61,62,63
-//  };
-//
-//  uint8_t terima32bit[32];
-//  uint8_t terima32bit2[32];
-//
-//  uint8_t kirim2bit[2] = {
-//		  32,33
-//  };
-//  uint8_t kirimen[128];
-//  uint8_t tomponen[128];
-//
-//  for(int i=0; i<128; i++){
-//	  kirimen[i] = i;
-//  }
-
-//  EEPROM_ErasePage(1);
-//  HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0, I2C_MEMADD_SIZE_16BIT, kirim32bit, sizeof(kirim32bit), 1000);
-//  HAL_Delay(50);
-//  HAL_I2C_Mem_Write(&hi2c3, 0xA0, 32, I2C_MEMADD_SIZE_16BIT, kirim32bit2, sizeof(kirim32bit2), 1000);
-//  HAL_Delay(50);
-
-    /* terima */
-		myTask();
-	HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
-	HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
-	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
-//	cobafloat = 2374/1000.0f;
-	while (1)
-	{
-		myTask();
-//		if(switchUp()){
-//			apaIni = "ATAS";
-//		}
-//		if(switchDown()){
-//			apaIni = "BAWAH";
-//		}
-//		if(switchLeft()){
-//			apaIni = "KIRI";
-//		}
-//		if(switchRight()){
-//			apaIni = "KANAN";
-//		}
-//		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 0);
-//		HAL_Delay(1000);
-//		HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, 1);
-//		HAL_Delay(1000);
-//		bakso = switchCombineUpEnc();
-//		if(bakso==1){
-//			pernahSatu = 1;
-//		}
-//		if(bakso==2){
-//			pernahDua = 2;
-//		}
-//		myTask();
-//		if(L_Samplef > 2000000){
-//			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 0);
-//		}
-//		else{
-//			HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
-//		}
-//
-//		if(R_Samplef > 2000000){
-//			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 0);
-//		}
-//		else{
-//			HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
-//		}
-
-//		 EEPROM_Read(0, 0, reciveBuff, sizeOfBuff);
-//
-//		memcpy(&myPreset2, reciveBuff, sizeof(myPreset2));
-//		EEPROM_Write(0, 0, kirimen, sizeof(kirimen));
-//		EEPROM_Read(0, 0, tomponen, sizeof(tomponen));
-//		HAL_Delay(1);
-//		HAL_I2C_Mem_Read(&hi2c3, 0xA0, 0, I2C_MEMADD_SIZE_16BIT, terima32bit, sizeof(terima32bit), 1000);
-//		HAL_Delay(50);
-//		HAL_I2C_Mem_Read(&hi2c3, 0xA0, 32, I2C_MEMADD_SIZE_16BIT, terima32bit2, sizeof(terima32bit2), 1000);
-//		HAL_Delay(50);
-//		baca = (EQ*)receiveBuf;
-//
-//		myName = baca->andi;
-//		meong2 = baca->meong;
-//		pipi2 = baca->pipi;
-//		HAL_I2C_Master_Transmit(&hi2c3, 0xA0, selectAddr, 2, 1000);
-//		HAL_Delay(1);
-//		HAL_I2C_Master_Receive(&hi2c3, 0xA0, cobaTerima, 5, 100);
-//		HAL_Delay(1);
-//		HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, cobaKirim, 3, 100);
-//		HAL_Delay(10);
-//		flag =  HAL_I2C_Mem_Read(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, cobaTerima, 5, 1000);
-//		HAL_I2C_Mem_Write(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_8BIT, cobaKirim, 3, 1000);
-
-//		HAL_I2C_Mem_Read(&hi2c3, 0xA0, 0x00, I2C_MEMADD_SIZE_16BIT, cobaTerima, 5, 1000);
-//		HAL_Delay(10);
-//		HAL_I2C_Mem_Read(hi2c, DevAddress, MemAddress, MemAddSize, pData, Size, Timeout);
-//		HAL_I2C_Mem_Write(hi2c, DevAddress, MemAddress, MemAddSize, pData, Size, Timeout);
-//		HAL_Delay(100);
-
-//		HAL_I2C_Master_Transmit(&hi2c3, 0xA0, cobaKirim, 5, 1000);
-////		HAL_Delay(1);
-//		HAL_I2C_Master_Transmit(&hi2c3, 0xA0, selectAddr, 2, 1000);
-//		HAL_I2C_Master_Receive(&hi2c3, 0xA0, cobaTerima, 5, 1000);
-//		HAL_Delay(11);
-
-
-		//		HAL_UART_Receive(&huart1, (uint8_t*)data_serial_rx, strlen(data_serial_rx), 100);
-
-		//		int i=0;
-		////		token = strtok(data_serial_rx, "#");
-		////		while(token != NULL){
-		////			array[i++]=token;
-		////			token = strtok(NULL,"#");
-		////		}
-		//		/* W0C0B0G120F20000B100\n */
-		////		if(data_serial_rx[0] == 'W'){
-		////			EQ_preset = data_serial)
-		////		}
-		//
-		//		token = strtok(data_serial_rx, "#");
-		//		while(token != NULL){
-		//			strParamEQ[i++] = token;
-		//			token = strtok(NULL, "#");
-		//		}
-		//		EQ_preset = atoi(strParamEQ[0]);
-		//		EQ_band = atoi(strParamEQ[1]);
-		//		EQ_gain = atof(strParamEQ[2]);
-		//		EQ_fc = atoi(strParamEQ[3]);
-		//		EQ_Q = atof(strParamEQ[4]);
-
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-	}
-  /* USER CODE END 3 */
-}
-
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
-
-  /** Configure the main internal regulator output voltage 
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-  /** Initializes the CPU, AHB and APB busses clocks 
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 168;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Initializes the CPU, AHB and APB busses clocks 
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
-
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S;
-  PeriphClkInitStruct.PLLI2S.PLLI2SN = 50;
-  PeriphClkInitStruct.PLLI2S.PLLI2SR = 2;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 400000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief I2C3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C3_Init(void)
-{
-
-  /* USER CODE BEGIN I2C3_Init 0 */
-
-  /* USER CODE END I2C3_Init 0 */
-
-  /* USER CODE BEGIN I2C3_Init 1 */
-
-  /* USER CODE END I2C3_Init 1 */
-  hi2c3.Instance = I2C3;
-  hi2c3.Init.ClockSpeed = 400000;
-  hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c3.Init.OwnAddress1 = 0;
-  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c3.Init.OwnAddress2 = 0;
-  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C3_Init 2 */
-
-  /* USER CODE END I2C3_Init 2 */
-
-}
-
-/**
-  * @brief I2S2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2S2_Init(void)
-{
-
-  /* USER CODE BEGIN I2S2_Init 0 */
-
-  /* USER CODE END I2S2_Init 0 */
-
-  /* USER CODE BEGIN I2S2_Init 1 */
-
-  /* USER CODE END I2S2_Init 1 */
-  hi2s2.Instance = SPI2;
-  hi2s2.Init.Mode = I2S_MODE_MASTER_TX;
-  hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
-  hi2s2.Init.DataFormat = I2S_DATAFORMAT_24B;
-  hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
-  hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_48K;
-  hi2s2.Init.CPOL = I2S_CPOL_LOW;
-  hi2s2.Init.ClockSource = I2S_CLOCK_PLL;
-  hi2s2.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_ENABLE;
-  if (HAL_I2S_Init(&hi2s2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2S2_Init 2 */
-
-  /* USER CODE END I2S2_Init 2 */
-
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
-  /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
-  /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
-  /* DMA2_Stream7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(I2S_EN_GPIO_Port, I2S_EN_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED_Pin|TP_D_Pin|TP_C_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, TP_B_Pin|TP_A_Pin|R_SIGN_Pin|L_SIGN_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : I2S_EN_Pin */
-  GPIO_InitStruct.Pin = I2S_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(I2S_EN_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : LED_Pin TP_D_Pin TP_C_Pin */
-  GPIO_InitStruct.Pin = LED_Pin|TP_D_Pin|TP_C_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : TP_B_Pin TP_A_Pin R_SIGN_Pin L_SIGN_Pin */
-  GPIO_InitStruct.Pin = TP_B_Pin|TP_A_Pin|R_SIGN_Pin|L_SIGN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : SW_UP_Pin SW_DOWN_Pin SW_LEFT_Pin SW_RIGHT_Pin */
-  GPIO_InitStruct.Pin = SW_UP_Pin|SW_DOWN_Pin|SW_LEFT_Pin|SW_RIGHT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : ENC_SW_Pin ENC_CLK_Pin ENC_DT_Pin */
-  GPIO_InitStruct.Pin = ENC_SW_Pin|ENC_CLK_Pin|ENC_DT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-}
-
-/* USER CODE BEGIN 4 */
-void HAL_I2SEx_TxRxHalfCpltCallback(I2S_HandleTypeDef *hi2s){
-	L_Samplef = readWord(0,0);
-	R_Samplef = readWord(1,0);
-
-	L_Samplef = L_Samplef * (myPreset[EQ_preset].level_L * 0.01);
-	R_Samplef = R_Samplef * (myPreset[EQ_preset].level_R * 0.01);
-
-	L_Samplef = IIR_Left(L_Samplef);
-	R_Samplef = IIR_Right(R_Samplef);
-
-	writeWord(L_Samplef, 0, 0);
-	writeWord(R_Samplef, 1, 0);
-}
-
-void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s){
-	L_Samplef = readWord(0,4);
-	R_Samplef = readWord(1,4);
-
-	L_Samplef = L_Samplef * (myPreset[EQ_preset].level_L * 0.01);
-	R_Samplef = R_Samplef * (myPreset[EQ_preset].level_R * 0.01);
-
-	L_Samplef = IIR_Left(L_Samplef);
-	R_Samplef = IIR_Right(R_Samplef);
-
-	writeWord(L_Samplef, 0, 4);
-	writeWord(R_Samplef, 1, 4);
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-	//	for(int i=0; i<strlen(data_serial_rx); i++){
-	//		data_serial_rx[i] = 0;
-	//	}
-
-	HAL_UART_Receive_IT(&huart1, (uint8_t*)data_serial_rx, LEN_SERIAL);
-}
-
-/* ------------------------------------------ EEPROM ------------------------------------------ */
-void saveToEeprom(void){
-	/* Baca preset terakhir */
-	EEPROM_WriteByte(0, 0, (uint8_t*)&EQ_preset);
-//	uint8_t buff_preset[1];
-//	buff_preset[0] = EQ_preset;
-//	EEPROM_Write(0, 0, buff_preset, 1);
-	/* Baca semua preset */
-	uint8_t* addrOfStruct = (uint8_t*)&myPreset;
-	uint16_t sizeOfStruct = sizeof(myPreset);
-	EEPROM_Write(1, 0, addrOfStruct, sizeOfStruct);
-}
-
-void LoadFromEeprom(void){
-	/* Tulis preset terakhir */
-//	uint8_t buff_preset[1];
-	EEPROM_ReadByte(0, 0, (uint8_t*)&EQ_preset);
-//	EEPROM_Read(0, 0, buff_preset, 1);
-//	HAL_I2C_Mem_Read(&h, DevAddress, MemAddress, MemAddSize, pData, Size, Timeout)
-//	EQ_preset =  buff_preset[0];
-	/* Tulis semua prset */
-    uint16_t sizeOfBuff = sizeof(myPreset);
-    uint8_t reciveBuff[sizeOfBuff];
-    EEPROM_Read(1, 0, reciveBuff, sizeOfBuff);
-    memcpy(&myPreset, reciveBuff, sizeof(myPreset));
-}
-
 /* USER CODE END 4 */
 
 /**

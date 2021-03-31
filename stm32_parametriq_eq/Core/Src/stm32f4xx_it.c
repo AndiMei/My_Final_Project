@@ -58,6 +58,7 @@
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern DMA_HandleTypeDef hdma_i2s2_ext_rx;
+extern TIM_HandleTypeDef htim2;
 extern DMA_HandleTypeDef hdma_usart1_tx;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern UART_HandleTypeDef huart1;
@@ -227,6 +228,31 @@ void DMA1_Stream4_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
 
   /* USER CODE END DMA1_Stream4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM2 global interrupt.
+  */
+void TIM2_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM2_IRQn 0 */
+  /* USER CODE END TIM2_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim2);
+  /* USER CODE BEGIN TIM2_IRQn 1 */
+  if(R_input > 10000){
+	  HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 0);
+  }
+  else{
+	  HAL_GPIO_WritePin(R_SIGN_GPIO_Port, R_SIGN_Pin, 1);
+  }
+  if(L_input > 10000){
+	  HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 0);
+  }
+  else{
+	  HAL_GPIO_WritePin(L_SIGN_GPIO_Port, L_SIGN_Pin, 1);
+  }
+
+  /* USER CODE END TIM2_IRQn 1 */
 }
 
 /**
