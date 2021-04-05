@@ -1,0 +1,5 @@
+myConverter.c:12:7:uint_to_string_digit	16	static
+myConverter.c:45:7:uint_to_string	24	static
+myConverter.c:55:7:int_to_string_digit	24	static
+myConverter.c:86:7:int_to_string	24	static
+myConverter.c:126:7:float_to_string	32	static

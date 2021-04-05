@@ -312,35 +312,6 @@ char Display_Puts(char* str, FontDef_t* Font, SSD1306_COLOR_t color) {
 	return *str;
 }
 
-//void Display_Float(float data, FontDef_t* Font, SSD1306_COLOR_t color){
-//	int16_t y;
-//	y = (int16_t) data;
-//	if(data<0){
-//		y = -y;
-//		data = -data;
-//		Display_Putc('-', Font, color);
-//	}
-//
-//	Display_Putc(y/10+0x30, Font, color); //puluhan
-//	Display_Putc(y%10+0x30, Font, color); //satuan
-//
-//	/* Presisi */
-//	Display_Putc('.', Font, color);
-//	data -= y;
-////	data += 0.01;
-//	Display_Putc(((uint8_t)(data*100))/10+0x30, Font, color);
-//	Display_Putc(((uint8_t)(data*100))%10+0x30, Font, color);
-//}
-
-//void Display_Angka3u(uint16_t data, FontDef_t* Font, SSD1306_COLOR_t color){
-//	Display_Putc(data/100+0x30, Font, color); 		// hundreds
-//	Display_Putc(data%100/10+0x30, Font, color); 	// tens
-//	Display_Putc(data%10+0x30, Font, color); 		// unit
-//}
-//uint8_t sign=1;
-//    if(x<0){ x=-x;  myLCD::Data('-');sign=0;}
-//    myLCD::Angka3u(x%1000);
-//    if(sign)lcd.Data(' ');
 void Display_PutUintDigit(uint16_t data, uint8_t digit, FontDef_t* Font, SSD1306_COLOR_t color){
 	switch(digit){
 	case 1:

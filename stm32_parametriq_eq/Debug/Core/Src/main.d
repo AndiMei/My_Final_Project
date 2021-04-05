@@ -33,7 +33,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  ../Core/Inc/arm_math.h ../Core/Inc/myIIR.h ../Core/Inc/main.h \
  ../Core/Inc/myFilter.h ../Core/Inc/myOled.h ../Core/Inc/myFonts.h \
- ../Core/Inc/myFonts.h ../Core/Inc/mySwitch.h ../Core/Inc/myEEPROM.h
+ ../Core/Inc/myFonts.h ../Core/Inc/mySwitch.h ../Core/Inc/myEEPROM.h \
+ ../Core/Inc/myConverter.h
 
 ../Core/Inc/main.h:
 
@@ -118,3 +119,5 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/mySwitch.h:
 
 ../Core/Inc/myEEPROM.h:
+
+../Core/Inc/myConverter.h:

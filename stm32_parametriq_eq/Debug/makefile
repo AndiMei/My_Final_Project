@@ -38,7 +38,7 @@ all: stm32_parametric_eq.elf secondary-outputs
 
 # Tool invocations
 stm32_parametric_eq.elf: $(OBJS) $(USER_OBJS) E:\Documents\Kuliah\Proyek_Akhir\Software\stm32_parametriq_eq\STM32F407VETX_FLASH.ld
-	arm-none-eabi-gcc -o "stm32_parametric_eq.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"E:\Documents\Kuliah\Proyek_Akhir\Software\stm32_parametriq_eq\STM32F407VETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="stm32_parametric_eq.map" -Wl,--gc-sections -Wl,--verbose -static -L"../Libs" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "stm32_parametric_eq.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"E:\Documents\Kuliah\Proyek_Akhir\Software\stm32_parametriq_eq\STM32F407VETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="stm32_parametric_eq.map" -Wl,--gc-sections -Wl,--verbose -static -L"../Libs" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
