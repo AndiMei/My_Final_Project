@@ -109,7 +109,7 @@ char data_serial_coba[] = "ABCD\n";
 char *dataSerial = data_serial_coba;
 
 char *token;
-char delim[2] = "#";
+char delim[2] = "_";
 char *array[16];
 
 #define MAX_PRESET	11
@@ -135,6 +135,7 @@ struct EQ{
 };
 struct EQ myPreset[MAX_PRESET];
 
+char *str_param_EQ[5];
 char *read_preset;
 char *read_band;
 char *read_channel;
@@ -220,18 +221,21 @@ int main(void)
 	HAL_UART_Receive_DMA(&huart1, buff_uart, 1);
 	//	send_init_EQ();
 	/* USER CODE END 2 */
+//	char delim[2] = "#";
+	token = strtok("0_1_2_3", delim);
 
+	/* walk through other tokens */
+	int i=0;
+	while( token != NULL ) {
+		str_param_EQ[i++]=token;
+		token = strtok(NULL, delim);
+	}
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
 		myTask();
-		token = strtok("A#N#D#I", "#");
 
-						/* walk through other tokens */
-						while( token != NULL ) {
-							token = strtok(NULL, "#");
-						}
 		//	  jajalString = float_to_string(12345.67);
 
 
