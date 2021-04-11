@@ -73,7 +73,11 @@ void loop() {
     }
     inString = "";
   }
-}
+  Serial2.print("WP$");
+  delay(1);
+  Serial2.print("0#1#2#3#4$");
+  delay(100);
+  }
 
 /* ================================= Fungsi- Fungsi ================================= */
 void send_data_STM32(char send_data[]) {
