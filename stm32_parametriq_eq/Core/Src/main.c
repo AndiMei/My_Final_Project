@@ -108,15 +108,14 @@ char data_serial_coba[] = "ABCD\n";
 
 char *dataSerial = data_serial_coba;
 
-char *token;
-char delim[2] = "_";
-char *array[16];
+
 
 #define MAX_PRESET	11
 #define MAX_BAND	5
 
 int8_t EQ_preset;
 int8_t EQ_band;
+int8_t EQ_channel;
 int8_t EQ_Con;
 char* jajalString;
 struct EQ{
@@ -135,10 +134,12 @@ struct EQ{
 };
 struct EQ myPreset[MAX_PRESET];
 
-char *str_param_EQ[5];
+char *str_param_EQ[10];
 char *read_preset;
 char *read_band;
 char *read_channel;
+
+int8_t test_EQ_preset;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -221,29 +222,13 @@ int main(void)
 	HAL_UART_Receive_DMA(&huart1, buff_uart, 1);
 	//	send_init_EQ();
 	/* USER CODE END 2 */
-//	char delim[2] = "#";
-	token = strtok("0_1_2_3", delim);
+	//	char delim[2] = "#";
 
-	/* walk through other tokens */
-	int i=0;
-	while( token != NULL ) {
-		str_param_EQ[i++]=token;
-		token = strtok(NULL, delim);
-	}
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
 		myTask();
-
-		//	  jajalString = float_to_string(12345.67);
-
-
-
-		//	  HAL_UART_Receive(&huart1, (uint8_t*)data_serial_rx, 7, 100);
-		//	  HAL_UART_Transmit(&huart1,(uint8_t*)data_serial_rx , 7, 100);
-		//	  L_input = 100000;
-
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -682,7 +667,7 @@ void send_init_EQ(void){
 }
 
 
-char yahek[11];
+
 _Bool pernahMasuk=0;
 uint8_t ukuranMasuk;
 _Bool enWritePreset=0;
@@ -733,11 +718,13 @@ void send_preset(uint8_t nPreset){
 
 
 
-const char s[2] = "-";
-char *token;
+
+//char *token;
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	static uint8_t pos;
-
+	char temp[50];
+	char *token;
 	data_serial_rx[pos] = buff_uart[0];
 	pos++;
 	if(buff_uart[0]=='$') {
@@ -778,36 +765,40 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		}
 
 		if(enWritePreset==1){
-//			if(strcmp(data_serial_rx, "WP$")!=0){
-//				strcpy(yahek,data_serial_rx);
-//
-//				/* get the first token */
-//				token = strtok("A#N#D#I", "#");
-//
-//				/* walk through other tokens */
-//				while( token != NULL ) {
-//					token = strtok(NULL, "#");
-//				}
-////				enWritePreset=0;
-//
-//			}
+			if(strcmp(data_serial_rx, "WP$")!=0){
+				strcpy(temp,data_serial_rx);
+				/* get the first token */
+				token = strtok(temp, "#");
+				int8_t pPos=0;
+				/* walk through other tokens */
+				while( token != NULL ) {
+					str_param_EQ[pPos++] = token;
+					token = strtok(NULL, "#");
+				}
+				EQ_preset = atoi(str_param_EQ[0]);
+				EQ_band = atoi(str_param_EQ[1]);
+				EQ_channel = atoi(str_param_EQ[2]);
 
+				if(EQ_channel==0){
+					myPreset[EQ_preset].level_L = atoi(str_param_EQ[3]);
+					myPreset[EQ_preset].gain_L[EQ_band] = atof(str_param_EQ[4]);
+					myPreset[EQ_preset].fc_L[EQ_band] = atoi(str_param_EQ[5]);
+					if(EQ_band>0 && EQ_band<4){
+						myPreset[EQ_preset].bw_L[EQ_band-1] = atoi(str_param_EQ[6]);
+					}
+				}
+				else{
+					myPreset[EQ_preset].level_R = atoi(str_param_EQ[3]);
+					myPreset[EQ_preset].gain_R[EQ_band] = atof(str_param_EQ[4]);
+					myPreset[EQ_preset].fc_R[EQ_band] = atoi(str_param_EQ[5]);
+					if(EQ_band>0 && EQ_band<4){
+						myPreset[EQ_preset].bw_R[EQ_band-1] = atoi(str_param_EQ[6]);
+					}
+				}
+				enWritePreset=0;
+			}
 		}
-		strcpy(data_serial_rx, "");
-		//		ukuranMasuk = strlen(data_serial_rx);
-		//		if(strcmp(data_serial_rx, "P0$\0")==0){
-		//			pernahMasuk=1;
-		//
-		//		}
-		//		jajal_kirim = uint_to_string(12345);
-		//		jajal_kirim = float_to_string(12345.76);
-		//		sprintf(yahek, "%d", -123);
-		////		char str_bw[4] = uint_to_string_digit(1234, 4);
-		//		ukuran = strlen(str_send);
-		//				send_init_EQ();
-		//		HAL_UART_Transmit(&huart1, (uint8_t*)str_send, ukuran,100);
-		//		jajal_kirim = uint_to_string_digit(67, 2);
-		//		HAL_UART_Transmit(&huart1, (uint8_t*)jajal_kirim, ukuran,100);
+		memset(data_serial_rx,0,strlen(data_serial_rx));
 	}
 }
 /* ------------------------------------------ EEPROM ------------------------------------------ */
@@ -1349,18 +1340,18 @@ void myTask(void){
 			Display_DrawFilledRectangle(0, 51, 128, 12, 0);
 			/* tampilan bw L */
 			l_bw_selected? Display_DrawFilledRectangle(0, 51, 61, 12, 1) : Display_DrawRectangle(0, 51, 61, 12, 1);
-			if(myPreset[EQ_preset].bw_L[EQ_band] >= 100)	Display_GotoXY((61-(7*4))/2, 53);
-			else if(myPreset[EQ_preset].bw_L[EQ_band] >= 10)	Display_GotoXY((61-(7*3))/2, 53);
+			if(myPreset[EQ_preset].bw_L[EQ_band-1] >= 100)	Display_GotoXY((61-(7*4))/2, 53);
+			else if(myPreset[EQ_preset].bw_L[EQ_band-1] >= 10)	Display_GotoXY((61-(7*3))/2, 53);
 			else Display_GotoXY((61-(7*2))/2, 53);
-			Display_PutUint(myPreset[EQ_preset].bw_L[EQ_band], &Font_7x10, !l_bw_selected);
+			Display_PutUint(myPreset[EQ_preset].bw_L[EQ_band-1], &Font_7x10, !l_bw_selected);
 			Display_Puts("%", &Font_7x10, !l_bw_selected);
 
 			/* tampilan bw R */
 			r_bw_selected? Display_DrawFilledRectangle(66, 51, 61, 12, 1) : Display_DrawRectangle(66, 51, 61, 12, 1);
-			if(myPreset[EQ_preset].bw_R[EQ_band] >= 100)	Display_GotoXY(66+(61-(7*4))/2, 53);
-			else if(myPreset[EQ_preset].bw_R[EQ_band] >= 10)	Display_GotoXY(66+(61-(7*3))/2, 53);
+			if(myPreset[EQ_preset].bw_R[EQ_band-1] >= 100)	Display_GotoXY(66+(61-(7*4))/2, 53);
+			else if(myPreset[EQ_preset].bw_R[EQ_band-1] >= 10)	Display_GotoXY(66+(61-(7*3))/2, 53);
 			else Display_GotoXY(66+(61-(7*2))/2, 53);
-			Display_PutUint(myPreset[EQ_preset].bw_R[EQ_band], &Font_7x10, !r_bw_selected);
+			Display_PutUint(myPreset[EQ_preset].bw_R[EQ_band-1], &Font_7x10, !r_bw_selected);
 			Display_Puts("%", &Font_7x10, !r_bw_selected);
 
 			if(EQ_band<1 || EQ_band>3) Display_DrawFilledRectangle(0, 51, 128, 12, 0);
@@ -1703,17 +1694,17 @@ void myTask(void){
 
 			case l_bw:
 				if(encoderCW()){
-					myPreset[EQ_preset].bw_L[EQ_band] += 1;
-					if(myPreset[EQ_preset].bw_L[EQ_band] > 100){
-						myPreset[EQ_preset].bw_L[EQ_band] = 0;
+					myPreset[EQ_preset].bw_L[EQ_band-1] += 1;
+					if(myPreset[EQ_preset].bw_L[EQ_band-1] > 100){
+						myPreset[EQ_preset].bw_L[EQ_band-1] = 0;
 					}
 					state_home = display_setting;
 					last_state = l_bw;
 				}
 				if(encoderCCW()){
-					myPreset[EQ_preset].bw_L[EQ_band] -= 1;
-					if(myPreset[EQ_preset].bw_L[EQ_band] < 0){
-						myPreset[EQ_preset].bw_L[EQ_band] = 100;
+					myPreset[EQ_preset].bw_L[EQ_band-1] -= 1;
+					if(myPreset[EQ_preset].bw_L[EQ_band-1] < 0){
+						myPreset[EQ_preset].bw_L[EQ_band-1] = 100;
 					}
 					state_home = display_setting;
 					last_state = l_bw;
@@ -1758,17 +1749,17 @@ void myTask(void){
 
 			case r_bw:
 				if(encoderCW()){
-					myPreset[EQ_preset].bw_R[EQ_band] += 1;
-					if(myPreset[EQ_preset].bw_R[EQ_band] > 100){
-						myPreset[EQ_preset].bw_R[EQ_band] = 0;
+					myPreset[EQ_preset].bw_R[EQ_band-1] += 1;
+					if(myPreset[EQ_preset].bw_R[EQ_band-1] > 100){
+						myPreset[EQ_preset].bw_R[EQ_band-1] = 0;
 					}
 					state_home = display_setting;
 					last_state = r_bw;
 				}
 				if(encoderCCW()){
-					myPreset[EQ_preset].bw_R[EQ_band] -= 1;
-					if(myPreset[EQ_preset].bw_R[EQ_band] < 0){
-						myPreset[EQ_preset].bw_R[EQ_band] = 100;
+					myPreset[EQ_preset].bw_R[EQ_band-1] -= 1;
+					if(myPreset[EQ_preset].bw_R[EQ_band-1] < 0){
+						myPreset[EQ_preset].bw_R[EQ_band-1] = 100;
 					}
 					state_home = display_setting;
 					last_state = r_bw;
