@@ -3,6 +3,7 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'main_page.dart';
 import 'dart:typed_data';
 import 'dart:convert';
+import 'coba.dart';
 
 bool isConnectedBT = false;
 
@@ -101,8 +102,13 @@ class _BluetoothPageState extends State<BluetoothPage>
         if (this.mounted) {
           setState(() {});
         }
-        Navigator.of(context).pop();
+        // Navigator.of(context).pop();
       });
+      if (isConnectedBT) {
+        Navigator.push(context, MaterialPageRoute(builder: (contex) {
+          return cobaPage();
+        }));
+      }
     }).catchError((error) {
       print(error);
     });
@@ -115,7 +121,7 @@ class _BluetoothPageState extends State<BluetoothPage>
   void _sendByte() async {
     try {
       // print('Te');
-      connectionBT.output.add(ascii.encode('Test Data\n'));
+      connectionBT.output.add(ascii.encode('BISMILLAH\$\n'));
       await connectionBT.output.allSent;
     } catch (e) {
       setState(() {});

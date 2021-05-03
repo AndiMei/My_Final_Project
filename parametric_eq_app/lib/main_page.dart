@@ -69,7 +69,7 @@ class _MainPageState extends State<MainPage> {
   void _sendByte() async {
     try {
       print('Mengirim');
-      connectionBT.output.add(ascii.encode('Mengirim data\n'));
+      connectionBT.output.add(ascii.encode("BISMILLAH"));
       await connectionBT.output.allSent;
     } catch (e) {
       setState(() {});

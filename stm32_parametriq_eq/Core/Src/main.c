@@ -955,6 +955,18 @@ void myTask(void){
 		LoadFromEeprom();
 		/* Hitung koefisien filter untuk pertama kaili on */
 		Calc_Coeff_Filter();
+
+		/* Matikan Bluetooth dan WiFi */
+		strcpy(str_send, "BTOFF$");
+		strLength = strlen(str_send);
+		HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
+		strcpy(str_send, "WIFIOFF$");
+
+		HAL_Delay(10);
+
+		strLength = strlen(str_send);
+		HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
+
 		HAL_Delay(1000);
 		state_home = display_home;
 		break;

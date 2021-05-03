@@ -74,27 +74,21 @@ void loop() {
     inString = "";
   }
 
-  //  delay(1);
+
   switch (Serial.read()) {
     case 'A':
       Serial.print("AOK");
       Serial2.print("WP$");
-//      delay(1);
       Serial2.print("0#0#0#85#12.5#180$");
-//           Serial2.print("0#1#0#85#12.5#180#98$");
       break;
 
     case 'B':
       Serial.print("BOK");
       Serial2.print("WP$");
-//      delay(1);
-//      Serial2.print("WO$");
       Serial2.print("0#1#0#85#12.5#180#98$");
       break;
   }
-
-  //  Serial2.print("0#0#0#85$");
-  //  delay(200);
+  Bluetooth_Stream();
 }
 
 /* ================================= Fungsi- Fungsi ================================= */
@@ -135,7 +129,7 @@ void Bluetooth_Stream() {
     if (inCharBT == '\n') {
       Serial.print("recv: " + dataDariHP);
       dataKeHP = "replied:" + dataDariHP;
-      SerialBT.println( dataKeHP);
+      SerialBT.println(dataKeHP);
       dataDariHP = "";
     }
   }

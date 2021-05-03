@@ -20,4 +20,4 @@ main.c:845:6:I2S_writeWord	24	static
 main.c:870:6:Calc_Coeff_Filter	8	static
 main.c:885:6:Default_Setting	16	static
 main.c:928:6:myTask	24	static
-main.c:1812:6:Error_Handler	4	static
+main.c:1824:6:Error_Handler	4	static
