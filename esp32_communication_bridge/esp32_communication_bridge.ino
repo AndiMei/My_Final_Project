@@ -1,3 +1,8 @@
+#define SERIAL_DEBUG
+
+enum state {
+  BT_on, BT_off, WiFi_on, WiFi_off
+} radio_state;
 /* <-----------| Include Library |-----------> */
 #include <BluetoothSerial.h>
 #include <WiFi.h>
@@ -20,12 +25,18 @@ int incomingByte;
 char data_serial_rx[21];
 char data_serial_tx[] = "1#2#+12.0#12500#0.35";
 
+char inByteS2;
+char inByteBT;
 String dataDariHP;
 String dataKeHP;
 char inCharBT;
+//bool detectNewLine=false;
 
 String inString;
+String strSerial2;
+String strBT;
 int8_t i = 0;
+int8_t cnt=0;
 
 /* =============================  Fungsi - Prototipe =============================  */
 void Switch_WiFi(bool state);
@@ -51,44 +62,140 @@ void setup() {
 
 /* ============================= Fungsi - Perulangan ============================== */
 void loop() {
-  /* Baca String Serial */
-  while (Serial2.available()) {
-    char inByte = Serial2.read();
-    inString += inByte;
+
+  /* Baca String Serial 2 */
+  if (Serial2.available()) {
+    inByteS2 = Serial2.read();
+    strSerial2 += inByteS2;
   }
-  /* Menerjemahkan Perintah */
-  if (inString.length() > 0) {
-    Serial.println(inString);
-    if (inString == "BTON$") {
+
+  if (radio_state == BT_on) {
+    /* Baca String Serial BT */
+    if (SerialBT.available()) {
+      inByteBT = SerialBT.read();
+      strBT += inByteBT;
+    }
+  }
+
+
+  //  if (strSerial2.length() > 0) {
+  if (inByteS2 == '\n') {
+    inByteS2 = '\0';
+    if (strSerial2 == "BTON\n") {
       Switch_Bluetooth(1);
+      radio_state = BT_on;
     }
-    else if (inString == "BTOFF$") {
+    else if (strSerial2 == "BTOFF\n") {
       Switch_Bluetooth(0);
+      radio_state = BT_off;
     }
-    else if (inString == "WIFION$") {
+    else if (strSerial2 == "WIFION\n") {
       Switch_WiFi(1);
+      radio_state = WiFi_on;
     }
-    else if (inString == "WIFIOFF$") {
+    else if (strSerial2 == "WIFIOFF\n") {
       Switch_WiFi(0);
+      radio_state = WiFi_off;
     }
-    inString = "";
+    else {
+      if (radio_state == BT_on) {
+//        cnt++;
+//        Serial.print("head:");
+//        Serial.print(strSerial2);
+        SerialBT.print(strSerial2);
+//        Serial.print("ke-" + strSerial2);
+      }
+//      Serial.print(strSerial2);
+    }
+    strSerial2 = "";
   }
 
-
-  switch (Serial.read()) {
-    case 'A':
-      Serial.print("AOK");
-      Serial2.print("WP$");
-      Serial2.print("0#0#0#85#12.5#180$");
-      break;
-
-    case 'B':
-      Serial.print("BOK");
-      Serial2.print("WP$");
-      Serial2.print("0#1#0#85#12.5#180#98$");
-      break;
+  if (inByteBT == '\n') {
+    inByteBT = '\0';
+//    Serial.print(strBT);
+    Serial2.print(strBT);
+    strBT = "";
+    
   }
-  Bluetooth_Stream();
+
+  //  /* Baca String Serial */
+  //  while (Serial2.available()) {
+  //    char inByte = Serial2.read();
+  //    inString += inByte;
+  //  }
+  //  /* Menerjemahkan Perintah */
+  //  if (inString.length() > 0) {
+  //#ifdef SERIAL_DEBUG
+  //    Serial.println(inString);
+  //#endif
+  //    if (inString == "BTON\n") {
+  //      Switch_Bluetooth(1);
+  //      radio_state = BT_on;
+  //    }
+  //    else if (inString == "BTOFF\n") {
+  //      Switch_Bluetooth(0);
+  //      radio_state = BT_off;
+  //    }
+  //    else if (inString == "WIFION\n") {
+  //      Switch_WiFi(1);
+  //      radio_state = WiFi_on;
+  //    }
+  //    else if (inString == "WIFIOFF\n") {
+  //      Switch_WiFi(0);
+  //      radio_state = WiFi_off;
+  //    }
+  //
+  //
+  //    inString = "";
+  //  }
+  //  switch (radio_state) {
+  //    case BT_on:
+  //      if (SerialBT.available()) {
+  //        inCharBT = SerialBT.read();
+  //        dataDariHP += inCharBT;
+  //        if (inCharBT == '\n') {
+  //          Serial2.print(dataDariHP);
+  //          Serial.print(dataDariHP);
+  //          dataDariHP = "";
+  //        }
+  //      }
+  //#ifdef SERIAL_DEBUG
+  //      Serial.println("keHP" + inString);
+  //#endif
+  //      SerialBT.print(inString);
+  //      break;
+  //    case BT_off:
+  //      break;
+  //
+  //    case WiFi_on:
+  //      break;
+  //    case WiFi_off:
+  //      break;
+  //  }
+
+
+
+      switch (Serial.read()) {
+        case 'a':
+          Serial.print("kirim komplit\n");
+          SerialBT.print("MWP\n");
+          SerialBT.print("0#0#0#0#12.5#180\n");
+          break;
+  
+        case 'b':
+          Serial.print("kirimWMP\n");
+          SerialBT.print("MWP\n");
+//          Serial2.print("0#1#0#100#12.5#180#98\n");
+          break;
+  
+        case 'c':
+          Serial.print("kirim data\n");
+//          Serial2.print("RP0\n");
+           SerialBT.print("0#0#0#0#12.5#180\n");
+          break;
+  
+      }
+  //  Bluetooth_Stream();
 }
 
 /* ================================= Fungsi- Fungsi ================================= */
@@ -126,10 +233,11 @@ void Bluetooth_Stream() {
   if (SerialBT.available()) {
     inCharBT = SerialBT.read();
     dataDariHP += inCharBT;
-    if (inCharBT == '\n') {
+    if (inCharBT == '\0') {
+      Serial2.print(dataDariHP);
       Serial.print("recv: " + dataDariHP);
-      dataKeHP = "replied:" + dataDariHP;
-      SerialBT.println(dataKeHP);
+      //      dataKeHP = "replied:" + dataDariHP;
+      //      SerialBT.println(dataKeHP);
       dataDariHP = "";
     }
   }

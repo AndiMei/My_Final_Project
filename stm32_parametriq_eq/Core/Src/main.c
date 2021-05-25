@@ -140,6 +140,9 @@ char *read_band;
 char *read_channel;
 
 int8_t test_EQ_preset;
+
+int16_t myDelay=0;
+_Bool enSave=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -229,6 +232,10 @@ int main(void)
 	while (1)
 	{
 		myTask();
+		if(enSave){
+			enSave=0;
+			saveToEeprom();
+		}
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -675,6 +682,8 @@ _Bool enWritePreset=0;
 void send_preset(uint8_t nPreset){
 	for(int j=0; j<MAX_BAND; j++){
 		for(int k=0; k<2; k++){
+			strcpy(str_temp, "MWP\n");
+			HAL_UART_Transmit(&huart1, (uint8_t*)str_temp, strlen(str_temp),100);
 			sprintf(str_preset, "%d", nPreset);
 			sprintf(str_band, "%d", j);
 			sprintf(str_channel, "%d", k);
@@ -705,67 +714,77 @@ void send_preset(uint8_t nPreset){
 
 			if(j>0 && j<4){
 				strcat(str_temp, str_fc);	strcat(str_temp, "#");
-				strcat(str_temp, str_bw);	strcat(str_temp, "$");
+				strcat(str_temp, str_bw);	strcat(str_temp, "\n");
 			}
 			else{
-				strcat(str_temp, str_fc);	strcat(str_temp, "$");
+				strcat(str_temp, str_fc);	strcat(str_temp, "\n");
 			}
 
 			HAL_UART_Transmit(&huart1, (uint8_t*)str_temp, strlen(str_temp),100);
+			//			for(myDelay=0; myDelay<100; myDelay++);
 		}
 	}
+	EQ_preset=nPreset;
+	Calc_Coeff_Filter();
 }
 
 
 
 
 //char *token;
-
+uint8_t  mantap = 0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	static uint8_t pos;
 	char temp[50];
 	char *token;
 	data_serial_rx[pos] = buff_uart[0];
 	pos++;
-	if(buff_uart[0]=='$') {
+	//	if(strcmp(buff_uart, "\0")==0) {
+	if(buff_uart[0]=='\n') {
+		mantap=3;
 		pos=0;
 		ukuran=strlen(data_serial_rx);
-		if(strcmp(data_serial_rx, "RP0$")==0){
+		if(strcmp(data_serial_rx, "RP0\n")==0){
 			send_preset(0);
 		}
-		else if(strcmp(data_serial_rx, "RP1$")==0){
+		else if(strcmp(data_serial_rx, "RP1\n")==0){
 			send_preset(1);
 		}
-		else if(strcmp(data_serial_rx, "RP2$")==0){
+		else if(strcmp(data_serial_rx, "RP2\n")==0){
 			send_preset(2);
 		}
-		else if(strcmp(data_serial_rx, "RP3$")==0){
+		else if(strcmp(data_serial_rx, "RP3\n")==0){
 			send_preset(3);
 		}
-		else if(strcmp(data_serial_rx, "RP4$")==0){
+		else if(strcmp(data_serial_rx, "RP4\n")==0){
 			send_preset(4);
 		}
-		else if(strcmp(data_serial_rx, "RP5$")==0){
+		else if(strcmp(data_serial_rx, "RP5\n")==0){
 			send_preset(5);
 		}
-		else if(strcmp(data_serial_rx, "RP6$")==0){
+		else if(strcmp(data_serial_rx, "RP6\n")==0){
 			send_preset(6);
 		}
-		else if(strcmp(data_serial_rx, "RP7$")==0){
+		else if(strcmp(data_serial_rx, "RP7\n")==0){
 			send_preset(7);
 		}
-		else if(strcmp(data_serial_rx, "RP8$")==0){
+		else if(strcmp(data_serial_rx, "RP8\n")==0){
 			send_preset(8);
 		}
-		else if(strcmp(data_serial_rx, "RP9$")==0){
+		else if(strcmp(data_serial_rx, "RP9\n")==0){
 			send_preset(9);
 		}
-		else if(strcmp(data_serial_rx, "WP$")==0){
+		else if(strcmp(data_serial_rx, "WP\n")==0){
 			enWritePreset=1;
+		}
+		else if(strcmp(data_serial_rx, "SP\n")==0){
+			enSave=1;
 		}
 
 		if(enWritePreset==1){
-			if(strcmp(data_serial_rx, "WP$")!=0){
+			mantap=1;
+			if(strcmp(data_serial_rx, "WP\n")!=0){
+				mantap=2;
 				strcpy(temp,data_serial_rx);
 				/* get the first token */
 				token = strtok(temp, "#");
@@ -795,6 +814,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 						myPreset[EQ_preset].bw_R[EQ_band-1] = atoi(str_param_EQ[6]);
 					}
 				}
+				Calc_Coeff_Filter();
 				enWritePreset=0;
 			}
 		}
@@ -957,10 +977,10 @@ void myTask(void){
 		Calc_Coeff_Filter();
 
 		/* Matikan Bluetooth dan WiFi */
-		strcpy(str_send, "BTOFF$");
+		strcpy(str_send, "BTOFF\n");
 		strLength = strlen(str_send);
 		HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
-		strcpy(str_send, "WIFIOFF$");
+		strcpy(str_send, "WIFIOFF\n");
 
 		HAL_Delay(10);
 
@@ -1181,7 +1201,7 @@ void myTask(void){
 					Display_GotoXY((128-(12*7))/2, 0);
 					Display_Puts("Bluetooth On", &Font_7x10, 1);
 
-					strcpy(str_send, "BTON$");
+					strcpy(str_send, "BTON\n");
 					strLength = strlen(str_send);
 					HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
 					break;
@@ -1190,7 +1210,7 @@ void myTask(void){
 					Display_GotoXY((128-(7*7))/2, 0);
 					Display_Puts("WiFi On", &Font_7x10, 1);
 
-					strcpy(str_send, "WIFION$");
+					strcpy(str_send, "WIFION\n");
 					strLength = strlen(str_send);
 					HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
 					break;
@@ -1201,12 +1221,12 @@ void myTask(void){
 			if(switchEncoder()){
 				switch(EQ_Con){
 				case 1:
-					strcpy(str_send, "BTOFF$");
+					strcpy(str_send, "BTOFF\n");
 					strLength = strlen(str_send);
 					HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
 					break;
 				case 2:
-					strcpy(str_send, "WIFIOFF$");
+					strcpy(str_send, "WIFIOFF\n");
 					strLength = strlen(str_send);
 					HAL_UART_Transmit(&huart1, (uint8_t*)str_send,strLength , 100);
 					break;

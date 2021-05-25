@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+
 import 'main_page.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'coba.dart';
+
+import 'streamer/stream_data.dart';
 
 bool isConnectedBT = false;
 
@@ -93,6 +96,12 @@ class _BluetoothPageState extends State<BluetoothPage>
       isConnectedBT = connectionBT.isConnected;
       isDisconnectedBT = false;
       setState(() {});
+      // connectionBT.input.listen(_receiveByte).onDone(() {
+      // connectionBT.input.listen((data) {
+      //   // streamReceive.add(ascii.decode(data));
+      //   print("asek: " + ascii.decode(data));
+      //   // print("apakah langsung" + ascii.decode(data) + "makaryo");
+      // });
       connectionBT.input.listen(_receiveByte).onDone(() {
         if (isDisconnectedBT) {
           print('Disconnecting locally');
@@ -105,6 +114,13 @@ class _BluetoothPageState extends State<BluetoothPage>
         // Navigator.of(context).pop();
       });
       if (isConnectedBT) {
+        // data akan dikirim ke halaman EQ
+        Stream stream = streamTransmit.stream;
+        stream.listen((data) {
+          // print("akan dikirim ke mikro=>" + data);
+          _sendByte(data);
+        });
+
         Navigator.push(context, MaterialPageRoute(builder: (contex) {
           return cobaPage();
         }));
@@ -115,13 +131,36 @@ class _BluetoothPageState extends State<BluetoothPage>
   }
 
   void _receiveByte(Uint8List data) {
-    print(ascii.decode(data));
+    // print(ascii.decode(data));
+    // returnDataBloc.feedReturnData(ascii.decode(data));
+    // Stream stream = streamTransmit.stream;
+    // stream.listen((value) {
+
+    // });
+    // streamReceive.add(ascii.decode(data));
+    var temp = ascii.decode(data).split('\n');
+    // print(semoga.length);
+    String strTemp = "";
+    for (int k = 0; k < temp.length; k++) {
+      // print(ascii.encode(semoga[k] + '\n'));
+      strTemp = temp[k] + '\n';
+      if ((strTemp != null) && (strTemp != '\n')) {
+        streamReceive.add(strTemp);
+      }
+    }
+
+    // if(semoga[i])
+    // if (ascii.decode(data).split('\n')) {
+    //   // print("asek:" + ascii.decode(data));
+    //   print("iki:");
+    //   print(data);
+    // }
   }
 
-  void _sendByte() async {
+  void _sendByte(String cmd) async {
     try {
       // print('Te');
-      connectionBT.output.add(ascii.encode('BISMILLAH\$\n'));
+      connectionBT.output.add(ascii.encode(cmd));
       await connectionBT.output.allSent;
     } catch (e) {
       setState(() {});
@@ -180,10 +219,28 @@ class _BluetoothPageState extends State<BluetoothPage>
             ),
             FloatingActionButton(
               child: Icon(Icons.send),
-              onPressed: isConnectedBT ? _sendByte : null,
+              // onPressed: isConnectedBT ? _sendByte('hallo') : null,
+              onPressed: isConnectedBT
+                  ? () {
+                      _sendByte('Bismillah\n');
+                    }
+                  : null,
+              // onPressed: null,
               backgroundColor:
                   isConnectedBT ? Colors.greenAccent[700] : Colors.grey,
-            )
+            ),
+            // isConnected
+            //     ? StreamBuilder(
+            //         initialData: 'dummy',
+            //         stream: sendDataBloc.streamSendData,
+            //         builder: (BuildContext context, AsyncSnapshot snapshot) {
+            //           _sendByte(snapshot.data);
+            //           return Text(
+            //             snapshot.data,
+            //           );
+            //         },
+            //       )
+            //     : Text('Gaonok'),
           ],
         ),
       ),
