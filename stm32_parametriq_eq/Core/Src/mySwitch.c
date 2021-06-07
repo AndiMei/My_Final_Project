@@ -86,20 +86,53 @@ _Bool encoderCCW(void){
 //	return detect;
 //}
 
-_Bool switchDown(void){
+//_Bool switchDown(void){
+//	static uint8_t debounce = 0xFF;
+//	_Bool detect = 0;
+//	if(!HAL_GPIO_ReadPin(SW_DOWN_GPIO_Port, SW_DOWN_Pin)){
+//		debounce = debounce << 1;
+//	}
+//	else{
+//		debounce = (debounce << 1) | 1;
+//	}
+//	if(debounce == 0x03){
+//		detect = 1;
+//	}
+//	return detect;
+//}
+
+uint8_t switchDown(void){
 	static uint8_t debounce = 0xFF;
-	_Bool detect = 0;
+	static uint32_t press;
+	_Bool longPress = 0;
+	uint8_t detect = 0;
 	if(!HAL_GPIO_ReadPin(SW_DOWN_GPIO_Port, SW_DOWN_Pin)){
 		debounce = debounce << 1;
+		detect = 0;
+		if(!longPress){
+			press++;
+			if(press > 100000){
+				longPress = 1;
+				detect = 2;
+			}
+		}
+
 	}
 	else{
 		debounce = (debounce << 1) | 1;
+		if(debounce==0xFF){
+			longPress = 0;
+		}
+		detect = 0;
+		press = 0;
 	}
-	if(debounce == 0x03){
+
+	if((debounce==0x03) && (!longPress)){
 		detect = 1;
 	}
 	return detect;
 }
+
 
 _Bool switchLeft(void){
 	static uint8_t debounce = 0xFF;
@@ -133,12 +166,13 @@ _Bool switchRight(void){
 //
 //_Bool pernahNol=0;
 //uint32_t press;
-_Bool longPress = 0;
-_Bool flag = 0;
+//_Bool longPress = 0;
+//_Bool flag = 0;
 
 uint8_t switchUp(void){
 	static uint8_t debounce = 0xFF;
 	static uint32_t press;
+	static _Bool longPress = 0;
 	uint8_t detect = 0;
 	if(!HAL_GPIO_ReadPin(SW_UP_GPIO_Port, SW_UP_Pin)){
 		debounce = debounce << 1;

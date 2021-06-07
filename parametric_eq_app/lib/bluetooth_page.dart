@@ -4,7 +4,7 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'main_page.dart';
 import 'dart:typed_data';
 import 'dart:convert';
-import 'coba.dart';
+import 'eq_page.dart';
 
 import 'streamer/stream_data.dart';
 
@@ -122,7 +122,7 @@ class _BluetoothPageState extends State<BluetoothPage>
         });
 
         Navigator.push(context, MaterialPageRoute(builder: (contex) {
-          return cobaPage();
+          return eqPage();
         }));
       }
     }).catchError((error) {

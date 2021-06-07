@@ -74,7 +74,9 @@ DMA_HandleTypeDef hdma_usart1_rx;
 /* Declares state */
 enum state2{
 	start, display_home, preset, l_level, r_level, save, save2, display_setting,
-	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw, set_default, setting_wireless, connected
+	band, l_gain, r_gain, l_fc, r_fc, l_bw, r_bw, set_default,
+	copy_preset, cancel_copy, save_copy, display_copy,
+	setting_wireless, connected
 }state_home;
 
 uint32_t L_Buff = 0;
@@ -143,6 +145,7 @@ int8_t test_EQ_preset;
 
 int16_t myDelay=0;
 _Bool enSave=0;
+int8_t pastePreset=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -163,6 +166,7 @@ void Calc_Coeff_Filter(void);
 void Default_Setting(void);
 void myTask(void);
 void send_init_EQ(void);
+void copyPresetTo(uint8_t source, uint8_t destination);
 
 
 /* USER CODE END PFP */
@@ -726,6 +730,7 @@ void send_preset(uint8_t nPreset){
 	}
 	EQ_preset=nPreset;
 	Calc_Coeff_Filter();
+	enSave=1;
 }
 
 
@@ -741,7 +746,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	pos++;
 	//	if(strcmp(buff_uart, "\0")==0) {
 	if(buff_uart[0]=='\n') {
-		mantap=3;
 		pos=0;
 		ukuran=strlen(data_serial_rx);
 		if(strcmp(data_serial_rx, "RP0\n")==0){
@@ -780,11 +784,50 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		else if(strcmp(data_serial_rx, "SP\n")==0){
 			enSave=1;
 		}
+		else if(strcmp(data_serial_rx, "CP0\n")==0){
+			copyPresetTo(EQ_preset, 0);
+
+		}
+		else if(strcmp(data_serial_rx, "CP1\n")==0){
+			copyPresetTo(EQ_preset, 1);
+		}
+
+		else if(strcmp(data_serial_rx, "CP2\n")==0){
+			copyPresetTo(EQ_preset, 2);
+		}
+
+		else if(strcmp(data_serial_rx, "CP3\n")==0){
+			copyPresetTo(EQ_preset, 3);
+		}
+
+		else if(strcmp(data_serial_rx, "CP4\n")==0){
+			copyPresetTo(EQ_preset, 4);
+		}
+
+		else if(strcmp(data_serial_rx, "CP5\n")==0){
+			copyPresetTo(EQ_preset, 5);
+		}
+
+		else if(strcmp(data_serial_rx, "CP6\n")==0){
+			copyPresetTo(EQ_preset, 6);
+		}
+
+		else if(strcmp(data_serial_rx, "CP7\n")==0){
+			copyPresetTo(EQ_preset, 7);
+		}
+
+		else if(strcmp(data_serial_rx, "CP8\n")==0){
+			copyPresetTo(EQ_preset, 8);
+		}
+
+		else if(strcmp(data_serial_rx, "CP9\n")==0){
+			copyPresetTo(EQ_preset, 9);
+		}
+
+
 
 		if(enWritePreset==1){
-			mantap=1;
 			if(strcmp(data_serial_rx, "WP\n")!=0){
-				mantap=2;
 				strcpy(temp,data_serial_rx);
 				/* get the first token */
 				token = strtok(temp, "#");
@@ -935,7 +978,21 @@ void Default_Setting(void){
 	}
 }
 
-
+void copyPresetTo(uint8_t source, uint8_t destination){
+	myPreset[destination].level_L = myPreset[source].level_L;
+	myPreset[destination].level_R = myPreset[source].level_R;
+	for(int i=0; i<MAX_BAND; i++){
+		myPreset[destination].gain_L[i] = myPreset[source].gain_L[i];
+		myPreset[destination].fc_L[i] = myPreset[source].fc_L[i];
+		myPreset[destination].gain_R[i] = myPreset[source].gain_R[i];
+		myPreset[destination].fc_R[i] = myPreset[source].fc_R[i];
+		if(i>0 && i<MAX_BAND-1){
+			myPreset[destination].bw_L[i-1] = myPreset[source].bw_L[i-1];
+			myPreset[destination].bw_R[i-1] = myPreset[source].bw_R[i-1];
+		}
+	}
+	enSave=1;
+}
 //void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 //	//	for(int i=0; i<strlen(data_serial_rx); i++){
 //	//		data_serial_rx[i] = 0;
@@ -951,7 +1008,10 @@ void myTask(void){
 	static _Bool l_selected = 0;
 	static _Bool r_selected = 0;
 	static _Bool con_selected = 0;
-
+	/* parameter copy preset */
+	static _Bool copyTo_selected = 1;
+	static _Bool copyOk_selected = 0;
+	static _Bool copyNo_selected = 0;
 	/* parameter connected */
 	static _Bool oneTime=0;
 	/* parameter advanced */
@@ -1044,15 +1104,49 @@ void myTask(void){
 
 		/* Hitung koefisien filter setiap pergantian parameter */
 		Calc_Coeff_Filter();
-
 		state_home = last_state;
-
 		break;
+
+		case display_copy:
+			/* clear baris 1 */
+			Display_DrawFilledRectangle(0, 0, 128, 12, 0);
+			/* tampilan copy to */
+			copyTo_selected? Display_DrawFilledRectangle(0, 0, 128, 12, 1) : Display_DrawRectangle(0, 0, 128, 12, 1);
+			Display_GotoXY((128-(10*7))/2, 2);
+			Display_Puts("Copy to: ", &Font_7x10, !copyTo_selected);
+			Display_PutUint(pastePreset,&Font_7x10 , !copyTo_selected);
+			/* clear baris 2 */
+			Display_DrawFilledRectangle(0, 17, 128, 21, 0);
+			/* tampilan NO */
+			copyNo_selected? Display_DrawFilledRectangle(0, 17, 61, 12, 1) : Display_DrawRectangle(0, 17, 61, 12, 1);
+			Display_GotoXY((61-(7*6))/2, 19);
+			Display_Puts("Cancel", &Font_7x10, !copyNo_selected);
+
+			/* tampilan OK */
+			copyOk_selected? Display_DrawFilledRectangle(66, 17, 61, 12, 1) : Display_DrawRectangle(66, 17, 61, 12, 1);
+			Display_GotoXY(66+(61-(7*4))/2, 19);
+			Display_Puts("Save", &Font_7x10, !copyOk_selected);
+			/* Update semua layar */
+			Display_UpdateScreen();
+			state_home = last_state;
+			break;
 
 		case preset:
 			if(switchUp()==2){
 				state_home = set_default;
 
+			}
+			if(switchDown()==2){
+				copyTo_selected = 1;
+				copyOk_selected = 0;
+				copyNo_selected = 0;
+				Display_Clear();
+				pastePreset = EQ_preset + 1;
+				if(pastePreset > MAX_PRESET-2){
+					pastePreset = 0;
+				}
+				state_home = display_copy;
+				last_state = copy_preset;
 			}
 			if(switchRight()){
 				preset_selected = 0;
@@ -1070,7 +1164,7 @@ void myTask(void){
 			}
 			if(encoderCW()){
 				EQ_preset++;
-				if(EQ_preset>MAX_PRESET-1) EQ_preset=0;
+				if(EQ_preset>MAX_PRESET-2) EQ_preset=0;
 				preset_selected = 1;
 				l_selected = 0;
 				r_selected = 0;
@@ -1079,7 +1173,7 @@ void myTask(void){
 			}
 			if(encoderCCW()){
 				EQ_preset--;
-				if(EQ_preset<0) EQ_preset=MAX_PRESET-1;
+				if(EQ_preset<0) EQ_preset=MAX_PRESET-2;
 				preset_selected = 1;
 				l_selected = 0;
 				r_selected = 0;
@@ -1090,6 +1184,86 @@ void myTask(void){
 				state_home = display_setting;
 				last_state = band;
 				Display_Clear();
+			}
+			break;
+
+		case copy_preset:
+			if(encoderCW()){
+				pastePreset += 1;
+				if(pastePreset == EQ_preset) pastePreset += 1;
+				if(pastePreset > MAX_PRESET-2){
+					pastePreset = 0;
+					if(pastePreset == EQ_preset) pastePreset += 1;
+				}
+				state_home = display_copy;
+				last_state = copy_preset;
+			}
+			if(encoderCCW()){
+				pastePreset -= 1;
+				if(pastePreset == EQ_preset) pastePreset -= 1;
+				if(pastePreset < 0){
+					pastePreset = MAX_PRESET-2;
+					if(pastePreset == EQ_preset) pastePreset -= 1;
+				}
+				state_home = display_copy;
+				last_state = copy_preset;
+			}
+			if(switchRight()){
+				copyTo_selected = 0;
+				copyOk_selected = 1;
+				copyNo_selected = 0;
+				state_home = display_copy;
+				last_state = save_copy;
+			}
+			if(switchLeft()){
+				copyTo_selected = 0;
+				copyOk_selected = 0;
+				copyNo_selected = 1;
+				state_home = display_copy;
+				last_state = cancel_copy;
+			}
+			break;
+
+		case cancel_copy:
+			if(switchEncoder()){
+				state_home = display_home;
+				last_state = preset;
+			}
+			if(switchRight()){
+				copyTo_selected = 1;
+				copyOk_selected = 0;
+				copyNo_selected = 0;
+				state_home = display_copy;
+				last_state = copy_preset;
+			}
+			if(switchLeft()){
+				copyTo_selected = 0;
+				copyOk_selected = 1;
+				copyNo_selected = 0;
+				state_home = display_copy;
+				last_state = save_copy;
+			}
+			break;
+
+		case save_copy:
+			if(switchEncoder()){
+				copyPresetTo(EQ_preset, pastePreset);
+				state_home = save;
+				last_state = preset;
+			}
+			if(switchRight()){
+				copyTo_selected = 0;
+				copyOk_selected = 0;
+				copyNo_selected = 1;
+				state_home = display_copy;
+				last_state = cancel_copy;
+			}
+			if(switchLeft()){
+				copyTo_selected = 1;
+				copyOk_selected = 0;
+				copyNo_selected = 0;
+				state_home = display_copy;
+				last_state = copy_preset;
 			}
 			break;
 
@@ -1181,6 +1355,7 @@ void myTask(void){
 				preset_selected = 0;
 				l_selected = 1;
 				r_selected = 0;
+				con_selected = 0;
 				state_home = save;
 				last_state = l_level;
 			}
@@ -1237,24 +1412,24 @@ void myTask(void){
 			}
 			break;
 		case save:
-			//		Display_GotoXY(3, 50);
-			//		Display_Puts("Saved !", &Font_7x10, 1);
-			//		/* Update semua layar */
-			//		Display_UpdateScreen();
-			/* Simpan data di EEPROM */
-			saveToEeprom();
-			/* clear baris 3 */
-			Display_DrawFilledRectangle(0, 49, 128, 12, 0);
-			Display_UpdateScreen();
+			if(copyOk_selected){
+				copyOk_selected=0;
+				Display_GotoXY((128-(8*7))/2, 40);
+				Display_Puts("Copied !", &Font_7x10, 1);
+				Display_UpdateScreen();
+				/* Simpan data di EEPROM */
+				HAL_Delay(1000);
+				Display_Clear();
+			}
+			else{
+				saveToEeprom();
+			}
 			state_home = display_home;
 			break;
 
 		case save2:
 			/* Simpan data di EEPROM */
 			saveToEeprom();
-			/* clear baris 3 */
-			Display_DrawFilledRectangle(0, 49, 128, 12, 0);
-			Display_UpdateScreen();
 			state_home = display_setting;
 			break;
 
@@ -1368,7 +1543,7 @@ void myTask(void){
 				Display_Puts("Hz", &Font_7x10, !r_fc_selected);
 			}
 
-			/* clear baris 3 */
+			/* clear baris 4 */
 			Display_DrawFilledRectangle(0, 51, 128, 12, 0);
 			/* tampilan bw L */
 			l_bw_selected? Display_DrawFilledRectangle(0, 51, 61, 12, 1) : Display_DrawRectangle(0, 51, 61, 12, 1);

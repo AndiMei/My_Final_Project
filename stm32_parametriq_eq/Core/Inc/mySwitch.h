@@ -19,7 +19,7 @@ uint16_t clk_debounce;
 uint8_t readEncoder(void);
 _Bool switchEncoder(void);
 uint8_t switchUp(void);
-_Bool switchDown(void);
+uint8_t switchDown(void);
 _Bool switchLeft(void);
 _Bool switchRight(void);
 _Bool encoderCW(void);

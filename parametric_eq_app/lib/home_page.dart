@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'bluetooth_page.dart';
 import 'wifi_page.dart';
-import 'coba.dart';
+import 'eq_page.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -15,73 +15,76 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text("EQ-JOSS V1.0"),
       ),
-      body: Column(
-        // crossAxisAlignment: CrossAxisAlignment.end,
-        // mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: <Widget>[
-          Flexible(
-            flex: 1,
-            child: Container(
-              height: MediaQuery.of(context).size.height,
-              width: MediaQuery.of(context).size.width,
-              child: RaisedButton(
-                color: Colors.purple[800],
-                child: Text(
-                  'Bluetooth',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 30,
-                    color: Colors.white,
-                  ),
+      body: Center(
+        child: Column(
+          // crossAxisAlignment: CrossAxisAlignment.center,
+          // mainAxisAlignment: MainAxisAlignment.spaceAround,
+          // mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              padding: EdgeInsets.only(top: 50, bottom: 20),
+              child: Text(
+                "Select Connection",
+                style: TextStyle(
+                  color: Colors.purple[900],
+                  fontWeight: FontWeight.bold,
+                  fontStyle: FontStyle.italic,
                 ),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (contex) {
-                    return BluetoothPage();
-                  }));
-                },
               ),
             ),
-          ),
-          Flexible(
-            flex: 1,
-            child: Container(
-              height: MediaQuery.of(context).size.height,
-              width: MediaQuery.of(context).size.width,
-              child: RaisedButton(
-                color: Colors.pink[900],
-                child: Text(
-                  'WiFi',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 30,
-                    color: Colors.white,
-                  ),
+            RaisedButton(
+              color: Colors.purple[900],
+              shape: StadiumBorder(),
+              child: Text(
+                "Bluetooth",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontStyle: FontStyle.italic,
                 ),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (contex) {
-                    return WifiPage();
-                  }));
-                },
               ),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (contex) {
+                  return BluetoothPage();
+                }));
+              },
             ),
-          ),
-          Flexible(
-            flex: 1,
-            child: Container(
-              height: MediaQuery.of(context).size.height,
-              width: MediaQuery.of(context).size.width,
-              color: Colors.purple,
-              child: RaisedButton(
-                child: Text("Test EQ"),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (contex) {
-                    return cobaPage();
-                  }));
-                },
+            RaisedButton(
+              color: Colors.purple[900],
+              shape: StadiumBorder(),
+              child: Text(
+                "WiFi",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (contex) {
+                  return WifiPage();
+                }));
+              },
             ),
-          ),
-        ],
+            RaisedButton(
+              color: Colors.red,
+              shape: StadiumBorder(),
+              child: Text(
+                "Debug EQ",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (contex) {
+                  return eqPage();
+                }));
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -10,10 +10,15 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 
+import 'eq_page.dart';
+import 'streamer/stream_data.dart';
+
 String _devicesIP = '192.168.001.001';
-String sendByteMsg = "Test Data lewat WiFi";
+String sendByteMsg = "RP0\n";
 int charLength = _devicesIP.length;
 String msgData = "";
+
+bool pisan;
 
 class WifiPage extends StatefulWidget {
   @override
@@ -21,32 +26,11 @@ class WifiPage extends StatefulWidget {
 }
 
 class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
+  WebSocketChannel channel;
+
+  bool isConnectedWS = false;
   final textController =
       new MaskedTextController(mask: '000.000.000.000', text: '$_devicesIP');
-  bool isConnectedWS = false;
-  // var channel;
-  WebSocketChannel channel;
-  // WebSocket myWebSocket;
-
-  void _sendByte() {
-    channel.sink.add(sendByteMsg);
-    setState(() {});
-  }
-
-  _onChangedtxt(String value) {
-    setState(() {
-      _devicesIP = value;
-      charLength = value.length;
-      // isConnectedWS =
-      // charLength = 15;
-    });
-  }
-
-  _onChangedTxtSend(String value) {
-    setState(() {
-      sendByteMsg = value;
-    });
-  }
 
   @override
   void dispose() {
@@ -60,24 +44,51 @@ class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
 
   @override
   void initState() {
-    // channel.sink.close();
+    print("Init");
+
+    Stream stream = streamTransmit.stream;
+    stream.listen((dataTx) {
+      channel.sink.add(dataTx);
+      setState(() {});
+    });
     super.initState();
+  }
+
+  // WebSocket myWebSocket;
+
+  void _gotoEQ() {
+    Navigator.push(context, MaterialPageRoute(builder: (contex) {
+      return eqPage();
+    }));
+    setState(() {});
+  }
+
+  _onChangedtxt(String value) {
+    setState(() {
+      _devicesIP = value;
+      charLength = value.length;
+    });
+  }
+
+  _onChangedTxtSend(String value) {
+    setState(() {
+      sendByteMsg = value;
+    });
   }
 
   _startConnectionWS() async {
     try {
       print("mulai");
       channel = IOWebSocketChannel.connect("ws://$_devicesIP");
-      channel.stream.listen((data) {
-        msgData = data;
+      channel.stream.listen((dataRx) {
+        msgData = dataRx;
         if (msgData == "OK") {
           isConnectedWS = true;
           setState(() {});
         }
         if (isConnectedWS) {
-          msgData = data;
+          streamReceive.add(dataRx);
         }
-        print(data);
       });
     } catch (e) {
       print(e);
@@ -105,16 +116,6 @@ class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
       ),
       body: Column(
         children: <Widget>[
-          ListTile(
-            title: Text("Bluetooth Status"),
-            // subtitle: Text(_bluetoothState.toString()),
-            trailing: RaisedButton(
-              child: Text("Setting"),
-              onPressed: () {
-                // FlutterBluetoothSerial.instance.openSettings();
-              },
-            ),
-          ),
           TextFormField(
             cursorColor: Theme.of(context).cursorColor,
             maxLength: 15,
@@ -130,28 +131,14 @@ class _WifiPageState extends State<WifiPage> with WidgetsBindingObserver {
           ),
           RaisedButton(
             child: Text(isConnectedWS ? 'Connected' : 'Connect'),
-            color: isConnectedWS ? Colors.greenAccent[700] : Colors.grey[350],
-            // onPressed: charLength < 15 ? null : _mulai,
+            color: isConnectedWS ? Colors.greenAccent[400] : Colors.grey[350],
             onPressed: charLength < 15 ? null : _startConnectionWS,
           ),
-          FloatingActionButton(
-            child: Icon(Icons.send),
-            onPressed: isConnectedWS ? _sendByte : null,
-            backgroundColor:
-                isConnectedWS ? Colors.greenAccent[700] : Colors.grey,
-          )
-          // isConnectedWS
-          //     ? StreamBuilder(
-          //         stream: channel.stream,
-          //         builder: (context, snapshot) {
-          //           if (snapshot.hasData) {}
-          //           // return Padding(
-          //           //     padding: EdgeInsets.symmetric(vertical: 24.0),
-          //           //     child: Text('${snapshot.hasData}'));
-          //           // snapshot.hasData ? '${snapshot.data}' : 'genek'));
-          //         },
-          //       )
-          //     : Container(height: 0, width: 0)
+          RaisedButton(
+            child: Text("Goto EQ"),
+            onPressed: isConnectedWS ? _gotoEQ : null,
+            color: isConnectedWS ? Colors.greenAccent[400] : Colors.grey,
+          ),
         ],
       ),
     );

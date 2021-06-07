@@ -1,4 +1,4 @@
-#define SERIAL_DEBUG
+//#define SERIAL_DEBUG
 
 enum state {
   BT_on, BT_off, WiFi_on, WiFi_off
@@ -17,26 +17,32 @@ enum state {
 
 /* <-----------| Object Definition|-----------> */
 WiFiServer myServer(WIFI_PORT);          // Object WiFi server
+//WiFiClient myClient = myServer.available();
 BluetoothSerial SerialBT;                // Object Bluetooth Serial
 WebSocketServer webSocketServer;         // Object Web server
+WiFiClient myClient;
 
 /* <-----------| Object Variable|-----------> */
-int incomingByte;
-char data_serial_rx[21];
-char data_serial_tx[] = "1#2#+12.0#12500#0.35";
+//int incomingByte;
+//char data_serial_rx[21];
+//char data_serial_tx[] = "1#2#+12.0#12500#0.35";
 
 char inByteS2;
 char inByteBT;
-String dataDariHP;
-String dataKeHP;
-char inCharBT;
+//char inByteWiFi;
+//String dataDariHP;
+//String dataKeHP;
+//char inCharBT;
+
 //bool detectNewLine=false;
 
-String inString;
+bool readyReceiveWifi = 0;
+bool isConnectedWifi = 0;
+
+//String inString;
 String strSerial2;
 String strBT;
-int8_t i = 0;
-int8_t cnt=0;
+String strWiFi;
 
 /* =============================  Fungsi - Prototipe =============================  */
 void Switch_WiFi(bool state);
@@ -77,8 +83,6 @@ void loop() {
     }
   }
 
-
-  //  if (strSerial2.length() > 0) {
   if (inByteS2 == '\n') {
     inByteS2 = '\0';
     if (strSerial2 == "BTON\n") {
@@ -98,156 +102,66 @@ void loop() {
       radio_state = WiFi_off;
     }
     else {
+#ifdef SERIAL_DEBUG
+      Serial.print("head:");
+      Serial.print(strSerial2);
+#endif
+      /* data serial_2 dikirim ke BT */
       if (radio_state == BT_on) {
-//        cnt++;
-//        Serial.print("head:");
-//        Serial.print(strSerial2);
         SerialBT.print(strSerial2);
-//        Serial.print("ke-" + strSerial2);
       }
-//      Serial.print(strSerial2);
+      /* data serial_2 dikirim ke WiFi */
+      else if (radio_state == WiFi_on) {
+#ifdef SERIAL_DEBUG
+        webSocketServer.sendData(strSerial2);
+#endif
+        Serial.println(strSerial2);
+      }
     }
     strSerial2 = "";
   }
 
-  if (inByteBT == '\n') {
-    inByteBT = '\0';
-//    Serial.print(strBT);
-    Serial2.print(strBT);
-    strBT = "";
-    
-  }
-
-  //  /* Baca String Serial */
-  //  while (Serial2.available()) {
-  //    char inByte = Serial2.read();
-  //    inString += inByte;
-  //  }
-  //  /* Menerjemahkan Perintah */
-  //  if (inString.length() > 0) {
-  //#ifdef SERIAL_DEBUG
-  //    Serial.println(inString);
-  //#endif
-  //    if (inString == "BTON\n") {
-  //      Switch_Bluetooth(1);
-  //      radio_state = BT_on;
-  //    }
-  //    else if (inString == "BTOFF\n") {
-  //      Switch_Bluetooth(0);
-  //      radio_state = BT_off;
-  //    }
-  //    else if (inString == "WIFION\n") {
-  //      Switch_WiFi(1);
-  //      radio_state = WiFi_on;
-  //    }
-  //    else if (inString == "WIFIOFF\n") {
-  //      Switch_WiFi(0);
-  //      radio_state = WiFi_off;
-  //    }
-  //
-  //
-  //    inString = "";
-  //  }
-  //  switch (radio_state) {
-  //    case BT_on:
-  //      if (SerialBT.available()) {
-  //        inCharBT = SerialBT.read();
-  //        dataDariHP += inCharBT;
-  //        if (inCharBT == '\n') {
-  //          Serial2.print(dataDariHP);
-  //          Serial.print(dataDariHP);
-  //          dataDariHP = "";
-  //        }
-  //      }
-  //#ifdef SERIAL_DEBUG
-  //      Serial.println("keHP" + inString);
-  //#endif
-  //      SerialBT.print(inString);
-  //      break;
-  //    case BT_off:
-  //      break;
-  //
-  //    case WiFi_on:
-  //      break;
-  //    case WiFi_off:
-  //      break;
-  //  }
-
-
-
-      switch (Serial.read()) {
-        case 'a':
-          Serial.print("kirim komplit\n");
-          SerialBT.print("MWP\n");
-          SerialBT.print("0#0#0#0#12.5#180\n");
-          break;
-  
-        case 'b':
-          Serial.print("kirimWMP\n");
-          SerialBT.print("MWP\n");
-//          Serial2.print("0#1#0#100#12.5#180#98\n");
-          break;
-  
-        case 'c':
-          Serial.print("kirim data\n");
-//          Serial2.print("RP0\n");
-           SerialBT.print("0#0#0#0#12.5#180\n");
-          break;
-  
-      }
-  //  Bluetooth_Stream();
-}
-
-/* ================================= Fungsi- Fungsi ================================= */
-void send_data_STM32(char send_data[]) {
-  Serial2.write(send_data);
-  Serial2.write('\0');
-}
-void WiFi_Stream() {
-  WiFiClient myClient = myServer.available();         // new Object Client
-  //  if (myClient) {
-  //    Serial.println("New Client !");
-  if (myClient.connected() && webSocketServer.handshake(myClient)) {
-    Serial.println("Client Connected !");
-    webSocketServer.sendData("OK");
-    while (myClient.connected()) {
-      dataDariHP = webSocketServer.getData();
-      if (dataDariHP.length() > 0) {
-        Serial.println("recv: " + dataDariHP);
-        dataKeHP = "replied:" + dataDariHP;
-        webSocketServer.sendData(dataKeHP);
-        if (dataDariHP == "CLOSE") {
-          myClient.stop();
-        }
-      }
-      delay(10);
-      //              Serial.println("Client disconnected !");
+  if (radio_state == BT_on) {
+    if (inByteBT == '\n') {
+      inByteBT = '\0';
+#ifdef SERIAL_DEBUG
+      Serial.print(strBT);
+#endif
+      Serial2.print(strBT);
+      strBT = "";
     }
-    Serial.println("Client disconnected !");
-    delay(100);
-    //        }
   }
-  delay(100);
-}
-void Bluetooth_Stream() {
-  if (SerialBT.available()) {
-    inCharBT = SerialBT.read();
-    dataDariHP += inCharBT;
-    if (inCharBT == '\0') {
-      Serial2.print(dataDariHP);
-      Serial.print("recv: " + dataDariHP);
-      //      dataKeHP = "replied:" + dataDariHP;
-      //      SerialBT.println(dataKeHP);
-      dataDariHP = "";
+  if (readyReceiveWifi) {
+    if (!isConnectedWifi) {
+      myClient = myServer.available();
+      if (myClient.connected() && webSocketServer.handshake(myClient)) {
+#ifdef SERIAL_DEBUG
+        Serial.println("Client Connected !");
+#endif
+        webSocketServer.sendData("OK");
+        isConnectedWifi = true;
+      }
+    }
+    if (myClient.connected()) {
+      strWiFi = webSocketServer.getData();
+      if (strWiFi.length() > 0) {
+#ifdef SERIAL_DEBUG
+        Serial.println(strWiFi);
+#endif
+        Serial2.print(strWiFi);
+        strWiFi = "";
+      }
     }
   }
 }
+
 void Switch_WiFi(bool state) {
   switch (state) {
     case 0:
       WiFi.disconnect();
       WiFi.mode(WIFI_OFF);
-
+      readyReceiveWifi = false;
+      isConnectedWifi = false;
       digitalWrite(LED_BLUE, HIGH);
       break;
     case 1:
@@ -264,7 +178,7 @@ void Switch_WiFi(bool state) {
       Serial.println(myIP);
       myServer.begin();                 // Start WiFi
       Serial.println("WiFi Server Started !");
-
+      readyReceiveWifi = 1;
       digitalWrite(LED_BLUE, LOW);
       break;
   }
